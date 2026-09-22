@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "Usuario autenticado en TapRD (administradores, superadministradores o clientes de negocios)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "superadmin", "client"] },
+        "clientId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "clients": {
+      "title": "Client",
+      "description": "Cliente comercial, perfil digital y tarjeta NFC de TapRD",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "businessName": { "type": "string" },
+        "slug": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "userId": { "type": "string" },
+        "accessStatus": { "type": "string", "enum": ["none", "pending", "active", "suspended"] },
+        "city": { "type": "string" },
+        "address": { "type": "string" },
+        "logo": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "pending", "inactive"] },
+        "plan": { "type": "string", "enum": ["starter", "business", "pro"] },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "pending", "expired", "cancelled"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "businessName", "slug", "status"]
+    },
+    "auditLogs": {
+      "title": "AuditLog",
+      "description": "Registro inmutable de auditoría para operaciones sensibles del sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "actorRole": { "type": "string" },
+        "action": { 
+          "type": "string", 
+          "enum": [
+            "CLIENT_ACCESS_CREATED", 
+            "CLIENT_ACCESS_SUSPENDED", 
+            "CLIENT_ACCESS_REACTIVATED", 
+            "CLIENT_INVITATION_RESENT", 
+            "CLIENT_PROFILE_UPDATED"
+          ] 
+        },
+        "targetClientId": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["actorUid", "actorRole", "action", "targetClientId", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Documentos de usuarios y perfiles vinculados a Firebase Auth"
+    },
+    "/clients/{clientId}": {
+      "schema": "clients",
+      "description": "Perfiles y configuraciones comerciales de clientes TapRD"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "auditLogs",
+      "description": "Historial de auditoría inmutable para acciones de seguridad y accesos"
+    }
+  }
+}

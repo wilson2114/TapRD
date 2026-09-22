@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        // Claims en token
+        ('role' in request.auth.token && (
+          request.auth.token.role == 'ADMIN' || 
+          request.auth.token.role == 'admin' || 
+          request.auth.token.role == 'superadmin'
+        )) ||
+        // Correo del administrador único / propietario de TapRD
+        ('email' in request.auth.token && (
+          request.auth.token.email.lower() == 'wilsonabelinobrito@gmail.com' ||
+          request.auth.token.email.lower().matches('.*@taprd[.]com$')
+        )) ||
+        // Rol en documento Firestore users/{uid}
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'admin', 'superadmin'])
+      );
+    }
+
+    function isClient() {
+      return isAuthenticated() && (
+        ('role' in request.auth.token && (
+          request.auth.token.role == 'CLIENT' || 
+          request.auth.token.role == 'client'
+        )) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['CLIENT', 'client'])
+      );
+    }
+
+    function isClientOwner(clientId) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientId == clientId) ||
+        ('clientId' in request.auth.token && request.auth.token.clientId == clientId)
+      );
+    }
+
+    // =========================================================================
+    // COLECCIÓN: users/{userId}
+    // =========================================================================
+    match /users/{userId} {
+      // ADMIN puede leer cualquier usuario; CLIENT solo puede leer su propio usuario
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+
+      // Creación: ADMIN o durante activación de cuenta vinculada
+      allow create: if isAdmin() || (
+        isAuthenticated() && 
+        request.auth.uid == userId && 
+        request.resource.data.role == 'CLIENT'
+      );
+
+      // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o clientId)
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        request.auth.uid == userId && 
+        request.resource.data.role == resource.data.role && 
+        request.resource.data.clientId == resource.data.clientId
+      );
+
+      // Eliminación: solo ADMIN
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: clients/{clientId}
+    // =========================================================================
+    match /clients/{clientId} {
+      // Lectura pública de perfiles comerciales (NFC y catálogo público /p/:slug)
+      allow read: if true;
+
+      // Creación: solo ADMIN
+      allow create: if isAdmin();
+
+      // Actualización: ADMIN puede actualizar cualquier campo; CLIENT solo su propio negocio
+      allow update: if isAdmin() || (
+        isClientOwner(clientId) && 
+        (!('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId)
+      );
+
+      // Eliminación: solo ADMIN
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: activations/{tokenId}
+    // =========================================================================
+    match /activations/{tokenId} {
+      // Lectura de tokens para verificación en /activar
+      allow read: if true;
+
+      // Creación: solo ADMIN
+      allow create: if isAdmin();
+
+      // Actualización: marcar como usado durante la activación autorizada
+      allow update: if isAdmin() || (resource.data.used == false && request.resource.data.used == true);
+
+      // Eliminación: solo ADMIN
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: auditLogs/{logId}
+    // =========================================================================
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // COLECCIÓN: system_settings/{settingId}
+    // =========================================================================
+    match /system_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

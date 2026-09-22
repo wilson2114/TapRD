@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TapRD | Soluciones NFC para negocios</title>
+    <meta name="description" content="Tarjetas NFC, placas NFC y perfiles digitales para conectar negocios con sus clientes en República Dominicana." />
+    <meta property="og:title" content="TapRD | Soluciones NFC para negocios" />
+    <meta property="og:description" content="Tarjetas NFC, placas NFC y perfiles digitales para conectar negocios con sus clientes en República Dominicana." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_DO" />
+    <meta property="og:site_name" content="TapRD" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TapRD | Soluciones NFC para negocios" />
+    <meta name="twitter:description" content="Tarjetas NFC, placas NFC y perfiles digitales para conectar negocios con sus clientes en República Dominicana." />
+    <!-- Prevenir error de getter-only en window.fetch en iframes y DevTools -->
+    <script>
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          var currentFetch = originalFetch;
+          var patchTarget = function(target) {
+            try {
+              if (!target) return;
+              var descriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
+              if (!descriptor || !descriptor.set) {
+                Object.defineProperty(target, 'fetch', {
+                  get: function() {
+                    return currentFetch;
+                  },
+                  set: function(val) {
+                    currentFetch = val;
+                  },
+                  configurable: true,
+                  enumerable: true
+                });
+              }
+            } catch (_) {}
+          };
+          if (window.Window && window.Window.prototype) {
+            patchTarget(window.Window.prototype);
+          }
+          patchTarget(window);
+        } catch (_) {}
+      })();
+    </script>
+    <!-- Favicon & Touch Icon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/><path d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/><path d='M4 4a16 16 0 0 1 16 0'/><path d='M7 7a11 11 0 0 1 10 0'/></svg>" />
+    <!-- Modern Sans Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Immediate theme initializer to prevent flash of unstyled theme (FOUC) -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('taprd_theme');
+          var isDark = saved === 'dark' || ((!saved || saved === 'system') && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          if (isDark) {
+            root.classList.add('dark');
+            root.setAttribute('data-theme', 'dark');
+            root.style.colorScheme = 'dark';
+          } else {
+            root.classList.remove('dark');
+            root.setAttribute('data-theme', 'light');
+            root.style.colorScheme = 'light';
+          }
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-['Plus_Jakarta_Sans',sans-serif]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

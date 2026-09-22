@@ -1,0 +1,7 @@
+{
+  "name": "TapRD",
+  "description": "Soluciones NFC y perfiles digitales para negocios y profesionales en República Dominicana.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

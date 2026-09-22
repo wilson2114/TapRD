@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark body,
+  :is(.dark, .dark *) body,
+  body.dark {
+    background-color: #020617;
+    color: #f8fafc;
+  }
+}
+
+/* Custom premium aesthetic utilities */
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes nfc-wave {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes float-card {
+  0%, 100% { transform: translateY(0px) rotate(10deg); }
+  50% { transform: translateY(-6px) rotate(12deg); }
+}
+
+.animate-float-card {
+  animation: float-card 4s ease-in-out infinite;
+}
+
+.animate-nfc-wave {
+  animation: nfc-wave 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+/* Glassmorphism & Metallic Sheen */
+.card-metallic-dark {
+  background: linear-gradient(135deg, #0b1120 0%, #1e293b 50%, #0f172a 100%);
+  position: relative;
+}
+
+.card-metallic-dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(56, 189, 248, 0.3), rgba(255, 255, 255, 0.02));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.card-metallic-gold {
+  background: linear-gradient(135deg, #2a2216 0%, #3d2f19 50%, #1c150c 100%);
+  position: relative;
+}
+
+.card-metallic-gold::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.5), rgba(245, 158, 11, 0.2), rgba(255, 255, 255, 0.05));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
