@@ -13,8 +13,10 @@ import {
   Info,
   ShieldCheck,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  Flag
 } from 'lucide-react';
+import { ReportProfileModal } from './ReportProfileModal';
 import { DigitalProfile as DigitalProfileType } from '../types';
 import { SocialButtons } from './SocialButtons';
 import { ServiceList } from './ServiceList';
@@ -35,6 +37,7 @@ interface DigitalProfileProps {
 export function DigitalProfile({ profile, onNavigateHome, onSelectDemoProfile }: DigitalProfileProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showSaaSModal, setShowSaaSModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
@@ -328,10 +331,28 @@ export function DigitalProfile({ profile, onNavigateHome, onSelectDemoProfile }:
             <p className="text-[10px] text-slate-400 dark:text-slate-500">
               Soluciones NFC para negocios en República Dominicana
             </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(true)}
+                className="inline-flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-rose-500 transition-colors cursor-pointer py-1 px-2 rounded-lg"
+              >
+                <Flag className="w-3 h-3" />
+                <span>Reportar este perfil</span>
+              </button>
+            </div>
           </div>
 
         </div>
       </main>
+
+      <ReportProfileModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        profileSlug={profile.slug}
+        clientId={profile.slug}
+        businessName={profile.name}
+      />
 
       {/* Interactive Toast Notification */}
       {toastMessage && (

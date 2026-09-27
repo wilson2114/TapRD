@@ -29,11 +29,11 @@ export function AdminSettingsPage({ onNavigate }: AdminSettingsPageProps) {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleCreateAdmin = (e: React.FormEvent) => {
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminMsg(null);
 
-    const result = createAdminUser(newAdminName, newAdminEmail, newAdminPassword, newAdminRole);
+    const result = await createAdminUser(newAdminName, newAdminEmail, newAdminPassword, newAdminRole);
     if (result.success) {
       setAdminMsg({ type: 'success', text: `¡Administrador ${newAdminName} registrado con éxito!` });
       setAdmins(getRegisteredAdmins());

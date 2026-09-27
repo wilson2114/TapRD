@@ -59,7 +59,7 @@ service cloud.firestore {
       allow create: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == userId && 
-        request.resource.data.role == 'CLIENT'
+        (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client')
       );
 
       // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o clientId)
@@ -85,9 +85,44 @@ service cloud.firestore {
       allow create: if isAdmin();
 
       // Actualización: ADMIN puede actualizar cualquier campo; CLIENT solo su propio negocio
+      // Permite también la actualización durante el flujo de activación del cliente autenticado
       allow update: if isAdmin() || (
-        isClientOwner(clientId) && 
-        (!('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId)
+        // Flujo de activación legítima por el propio usuario recién autenticado
+        (
+          isAuthenticated() &&
+          request.auth.uid == request.resource.data.userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'userId', 'clientEmail', 'active', 'status', 'accessStatus', 'updatedAt', 'activationToken',
+            'termsAccepted', 'privacyAccepted', 'termsAcceptedAt', 'privacyAcceptedAt', 'termsVersion', 'privacyVersion'
+          ]) &&
+          request.resource.data.accessStatus == 'active'
+        ) ||
+        // Flujo normal de cliente propietario (excluyendo estados protegidos y contratos)
+        (
+          isClientOwner(clientId) && 
+          (!('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'plan', 
+            'subscriptionStatus', 
+            'subscriptionStartedAt', 
+            'subscriptionExpiresAt', 
+            'gracePeriodUntil',
+            'billingCycle', 
+            'paymentProvider', 
+            'paymentCustomerId', 
+            'paymentSubscriptionId',
+            'paymentStatus',
+            'amount',
+            'currency',
+            'lastPaymentAt',
+            'nextPaymentAt',
+            'contractStatus',
+            'contractVersion',
+            'contractSignedAt',
+            'contractExpiresAt',
+            'contractDocumentUrl'
+          ]))
+        )
       );
 
       // Eliminación: solo ADMIN
@@ -95,14 +130,64 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // COLECCIÓN: privacyRequests/{requestId} (PARTE 10 - Derechos ARCO)
+    // =========================================================================
+    match /privacyRequests/{requestId} {
+      // El cliente solo puede leer sus propias solicitudes; ADMIN lee todas
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // El cliente solo puede crear una solicitud vinculada a su propio UID; ADMIN también puede
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+
+      // Solo ADMIN puede actualizar (cambiar estado / agregar notas) o eliminar
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: reports/{reportId} (PARTE 10 - Reportes y Moderación)
+    // =========================================================================
+    match /reports/{reportId} {
+      // Cualquier visitante puede enviar un reporte de infracción en un perfil público
+      allow create: if true;
+
+      // Solo ADMIN puede consultar los reportes (protegiendo datos del denunciante), moderar o eliminarlos
+      allow read, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: plans/{planId}
+    // =========================================================================
+    match /plans/{planId} {
+      // Lectura pública para visualización en /planes y selección de catálogo
+      allow read: if true;
+
+      // Gestión de planes reservada exclusivamente a administradores
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // COLECCIÓN: subscriptionAuditLogs/{logId}
+    // =========================================================================
+    match /subscriptionAuditLogs/{logId} {
+      // Solo administradores pueden consultar el registro de auditoría
+      allow read: if isAdmin();
+
+      // Solo administradores pueden registrar cambios de suscripción
+      allow create: if isAdmin();
+
+      // Registro inmutable
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
     // COLECCIÓN: activations/{tokenId}
     // =========================================================================
     match /activations/{tokenId} {
-      // Lectura de tokens para verificación en /activar
+      // Lectura pública de tokens para verificación en /activar
       allow read: if true;
 
-      // Creación: solo ADMIN
-      allow create: if isAdmin();
+      // Creación de tokens: permitida para administradores y para registro de activación
+      allow create: if true;
 
       // Actualización: marcar como usado durante la activación autorizada
       allow update: if isAdmin() || (resource.data.used == false && request.resource.data.used == true);

@@ -76,7 +76,7 @@ export function ProductCard({ product, onSelect, onViewDetails, detailed = true 
               type="button"
               id={`btn-detalles-${product.slug || product.id}`}
               onClick={() => onViewDetails(product)}
-              className="py-3 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              className="min-h-[44px] py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
               <span>Ver detalles</span>
@@ -89,7 +89,7 @@ export function ProductCard({ product, onSelect, onViewDetails, detailed = true 
             type="button"
             id={`btn-solicitar-${product.slug || product.id}`}
             onClick={() => onSelect(product)}
-            className="py-3 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Solicitar</span>

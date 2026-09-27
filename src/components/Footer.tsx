@@ -62,97 +62,19 @@ export function Footer({ onNavigate, onOpenContact }: FooterProps) {
               <li>
                 <button
                   type="button"
-                  onClick={() => onNavigate('/productos/tap-card')}
+                  onClick={() => onNavigate('/planes')}
+                  className="hover:text-white transition-colors text-cyan-400 font-semibold"
+                >
+                  Planes & Suscripciones
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/contacto')}
                   className="hover:text-white transition-colors"
                 >
-                  Tap Card (Tarjeta NFC)
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/productos/tap-business')}
-                  className="hover:text-white transition-colors"
-                >
-                  Tap Business (Placa)
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/productos/tap-review')}
-                  className="hover:text-white transition-colors"
-                >
-                  Tap Review (Reseñas)
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/productos/tap-sticker')}
-                  className="hover:text-white transition-colors"
-                >
-                  Tap Sticker (Adhesivo)
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={onOpenContact}
-                  className="hover:text-white transition-colors"
-                >
-                  Contacto y Cotizaciones
-                </button>
-              </li>
-              <li>
-                <a
-                  href="/#como-funciona"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onNavigate('/#como-funciona');
-                  }}
-                  className="hover:text-white transition-colors"
-                >
-                  Cómo funciona
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Demos and Legal */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-4">
-              Demos & Legal
-            </h4>
-            <ul className="space-y-2.5 text-sm text-slate-400">
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/demo/barberia')}
-                  className="hover:text-white transition-colors flex items-center gap-1.5"
-                >
-                  <span>Demo: Barbería Wilson</span>
-                  <span className="text-[10px] bg-blue-900/60 text-blue-300 px-1.5 rounded">Ver</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/demo/restaurante')}
-                  className="hover:text-white transition-colors flex items-center gap-1.5"
-                >
-                  <span>Demo: Restaurante Mare Nostrum</span>
-                  <span className="text-[10px] bg-blue-900/60 text-blue-300 px-1.5 rounded">Ver</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/demo/inmobiliaria')}
-                  className="hover:text-white transition-colors flex items-center gap-1.5"
-                >
-                  <span>Demo: Inmobiliaria Aura</span>
-                  <span className="text-[10px] bg-blue-900/60 text-blue-300 px-1.5 rounded">Ver</span>
+                  Contacto & Cotizaciones
                 </button>
               </li>
               <li className="pt-2">
@@ -163,7 +85,7 @@ export function Footer({ onNavigate, onOpenContact }: FooterProps) {
                   className="text-xs text-cyan-400 hover:text-cyan-300 font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                  <span>Portal de Clientes (Mi Negocio)</span>
+                  <span>Portal de Clientes</span>
                 </button>
               </li>
               <li>
@@ -174,22 +96,89 @@ export function Footer({ onNavigate, onOpenContact }: FooterProps) {
                   className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <span>Acceso Administrativo (Login)</span>
+                  <span>Acceso Administrativo</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          {/* Legal & Compliance (PARTE 10) */}
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-4">
+              Legal y Privacidad
+            </h4>
+            <ul className="space-y-2 text-xs text-slate-400">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/terminos')}
+                  className="hover:text-white transition-colors"
+                >
+                  Términos y condiciones
                 </button>
               </li>
               <li>
                 <button
-                  id="footer-link-admin-register"
                   type="button"
-                  onClick={() => onNavigate('/admin/registro')}
-                  className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
+                  onClick={() => onNavigate('/privacidad')}
+                  className="hover:text-white transition-colors"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>Registrarme como Admin</span>
+                  Política de privacidad
                 </button>
               </li>
               <li>
-                <span className="text-xs text-slate-600">Privacidad • Términos</span>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/cookies')}
+                  className="hover:text-white transition-colors"
+                >
+                  Política de cookies
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/politica-cancelacion')}
+                  className="hover:text-white transition-colors"
+                >
+                  Política de cancelación
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/politica-reembolso')}
+                  className="hover:text-white transition-colors"
+                >
+                  Política de reembolso
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/uso-aceptable')}
+                  className="hover:text-white transition-colors"
+                >
+                  Uso aceptable
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/aviso-legal')}
+                  className="hover:text-white transition-colors"
+                >
+                  Aviso legal
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/contacto')}
+                  className="hover:text-white transition-colors text-slate-300 font-semibold"
+                >
+                  Contacto
+                </button>
               </li>
             </ul>
           </div>
@@ -198,7 +187,7 @@ export function Footer({ onNavigate, onOpenContact }: FooterProps) {
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} TapRD. Todos los derechos reservados.</p>
+          <p>Copyright © {new Date().getFullYear()} TapRD. Todos los derechos reservados.</p>
           <div className="flex items-center gap-1">
             <span>Hecho con dedicación para negocios en República Dominicana 🇩🇴</span>
           </div>

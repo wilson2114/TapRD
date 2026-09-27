@@ -325,8 +325,27 @@ export function LoginPage({ onNavigate, initialMode = 'login' }: LoginPageProps)
           </div>
         </div>
 
-        {/* Enlace al sitio público */}
-        <div className="mt-8 text-center">
+        {/* Enlace al sitio público y legales */}
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-[11px] text-slate-500">
+            Al acceder a tu cuenta reconoces los{' '}
+            <button
+              type="button"
+              onClick={() => onNavigate('/terminos')}
+              className="text-slate-400 hover:text-white underline cursor-pointer"
+            >
+              Términos
+            </button>{' '}
+            y la{' '}
+            <button
+              type="button"
+              onClick={() => onNavigate('/privacidad')}
+              className="text-slate-400 hover:text-white underline cursor-pointer"
+            >
+              Política de privacidad
+            </button>
+            .
+          </p>
           <button
             type="button"
             onClick={() => onNavigate('/')}

@@ -11,6 +11,13 @@ export interface AppUser {
   updatedAt?: string;
   lastLogin?: string;
   photoURL?: string;
+  // Cumplimiento Legal y Consentimiento (PARTE 10)
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  termsAcceptedAt?: string;
+  privacyAcceptedAt?: string;
+  termsVersion?: string;
+  privacyVersion?: string;
 }
 
 export function isAdminRole(role?: string): boolean {

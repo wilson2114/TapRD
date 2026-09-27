@@ -132,19 +132,44 @@ export function ClientDashboardPage({ onNavigate }: ClientDashboardPageProps) {
             </div>
           </div>
 
-          {/* Card 2: Plan Contratado */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Plan TapRD</span>
-              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          {/* Card 2: Plan Contratado (Requirement 18) */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Plan TapRD</span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                  client.subscriptionStatus === 'active'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                    : client.subscriptionStatus === 'trialing'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300'
+                    : client.subscriptionStatus === 'suspended' || client.subscriptionStatus === 'expired'
+                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+                }`}>
+                  {client.subscriptionStatus === 'active' ? 'Activa' : client.subscriptionStatus || 'Activa'}
+                </span>
+              </div>
+              <div>
+                <p className="text-xl font-black text-slate-900 dark:text-white capitalize">
+                  Plan {client.plan || 'Starter'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {client.subscriptionExpiresAt 
+                    ? `Vence: ${new Date(client.subscriptionExpiresAt).toLocaleDateString()}` 
+                    : 'Suscripción continua'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xl font-black text-slate-900 dark:text-white capitalize">
-                Plan {client.plan || 'Business'}
-              </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Suscripción al día
-              </p>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => onNavigate('/planes')}
+                className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>Cambiar plan</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           </div>
 

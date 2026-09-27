@@ -61,10 +61,12 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
   return (
     <header
       id="main-navbar"
-      className={`sticky top-0 z-40 w-full transition-all duration-200 ${
-        scrolled
-          ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-sm border-b border-slate-100 dark:border-slate-800'
-          : 'bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800'
+      className={`sticky top-0 z-50 w-full transition-all duration-200 ${
+        mobileMenuOpen
+          ? 'bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm'
+          : scrolled
+            ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-sm border-b border-slate-100 dark:border-slate-800'
+            : 'bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800'
       }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -113,6 +115,15 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
               }`}
             >
               Productos
+            </button>
+            <button
+              id="nav-planes"
+              onClick={() => handleLinkClick('/planes')}
+              className={`text-sm font-semibold transition-colors cursor-pointer ${
+                currentPath.startsWith('/planes') ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Planes
             </button>
             <a
               id="nav-como-funciona"
@@ -290,7 +301,7 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
           {/* Mobile Actions: Iniciar sesión / Cerrar sesión + Menu toggle (Phones) */}
           <div className="flex items-center gap-1.5 sm:gap-2 lg:hidden">
             {/* Theme Toggle Button Mobile */}
-            <ThemeToggle id="navbar-mobile-theme-toggle" />
+            <ThemeToggle id="navbar-mobile-theme-toggle" className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl" />
 
             {isAuthenticated ? (
               <>
@@ -299,22 +310,22 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
                     id="btn-mobile-header-admin"
                     type="button"
                     onClick={() => handleLinkClick('/admin')}
-                    className="inline-flex items-center justify-center min-h-[38px] px-2.5 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 active:bg-blue-200 rounded-xl transition-all border border-blue-200 dark:border-blue-800/80 cursor-pointer shadow-2xs"
+                    className="inline-flex items-center justify-center min-h-[44px] px-3 py-2 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 active:bg-blue-200 rounded-xl transition-all border border-blue-200 dark:border-blue-800/80 cursor-pointer shadow-2xs"
                     aria-label="Panel Admin"
                   >
-                    <LayoutDashboard className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 sm:mr-1 shrink-0" />
-                    <span className="hidden min-[360px]:inline ml-1">Panel</span>
+                    <LayoutDashboard className="w-4 h-4 text-blue-600 dark:text-blue-400 sm:mr-1 shrink-0" />
+                    <span className="hidden min-[380px]:inline ml-1">Panel</span>
                   </button>
                 ) : (
                   <button
                     id="btn-mobile-header-portal"
                     type="button"
                     onClick={() => handleLinkClick('/cliente')}
-                    className="inline-flex items-center justify-center min-h-[38px] px-2.5 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:bg-emerald-200 rounded-xl transition-all border border-emerald-200 dark:border-emerald-800/80 cursor-pointer shadow-2xs"
+                    className="inline-flex items-center justify-center min-h-[44px] px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:bg-emerald-200 rounded-xl transition-all border border-emerald-200 dark:border-emerald-800/80 cursor-pointer shadow-2xs"
                     aria-label="Mi Portal"
                   >
-                    <LayoutDashboard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 sm:mr-1 shrink-0" />
-                    <span className="hidden min-[360px]:inline ml-1">Portal</span>
+                    <LayoutDashboard className="w-4 h-4 text-emerald-600 dark:text-emerald-400 sm:mr-1 shrink-0" />
+                    <span className="hidden min-[380px]:inline ml-1">Portal</span>
                   </button>
                 )}
 
@@ -322,24 +333,23 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
                   id="btn-mobile-header-logout"
                   type="button"
                   onClick={handleLogout}
-                  className="inline-flex items-center justify-center min-h-[38px] px-2.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 active:bg-rose-200 rounded-xl transition-all border border-rose-200 dark:border-rose-800/80 cursor-pointer shadow-2xs"
+                  className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 active:bg-rose-200 rounded-xl transition-all border border-rose-200 dark:border-rose-800/80 cursor-pointer shadow-2xs"
                   aria-label="Cerrar sesión"
                   title="Cerrar sesión"
                 >
-                  <LogOut className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 sm:mr-1 shrink-0" />
-                  <span className="hidden min-[360px]:inline ml-1">Salir</span>
+                  <LogOut className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
                 </button>
               </>
             ) : (
-              /* Direct Mobile "Iniciar sesión" button right on the top navbar */
+              /* Compact login button on mobile */
               <button
                 id="btn-mobile-header-login"
                 type="button"
                 onClick={() => handleAuthClick('login')}
-                className="inline-flex items-center justify-center min-h-[38px] px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 rounded-xl transition-all border border-slate-200 dark:border-slate-700 cursor-pointer shadow-2xs"
+                className="inline-flex items-center justify-center min-h-[44px] px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 rounded-xl transition-all border border-slate-200 dark:border-slate-700 cursor-pointer shadow-2xs"
                 aria-label="Iniciar sesión"
               >
-                <LogIn className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 sm:mr-1 shrink-0" />
+                <LogIn className="w-4 h-4 text-blue-600 dark:text-blue-400 sm:mr-1 shrink-0" />
                 <span className="hidden min-[360px]:inline ml-1">Iniciar sesión</span>
                 <span className="min-[360px]:hidden ml-1">Entrar</span>
               </button>
@@ -350,7 +360,7 @@ export function Navbar({ currentPath, onNavigate, onOpenContact, onOpenAuth }: N
               id="btn-mobile-menu-toggle"
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 focus:outline-none min-w-[42px] min-h-[42px] flex items-center justify-center cursor-pointer"
+              className="p-2 rounded-xl text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 focus:outline-none min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer shrink-0"
               aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
               aria-expanded={mobileMenuOpen}
             >

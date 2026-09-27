@@ -4,5 +4,14 @@ dist/
 coverage/
 .DS_Store
 *.log
-.env*
+firebase-debug.log
+.firebase/
+.env
+.env.*
 !.env.example
+*.pem
+*.key
+*.cert
+serviceAccount*.json
+service-account*.json
+credentials.json

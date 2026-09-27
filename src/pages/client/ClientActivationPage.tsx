@@ -46,6 +46,7 @@ export function ClientActivationPage({ onNavigate }: ClientActivationPageProps) 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isActivated, setIsActivated] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Leer parámetros de la URL (?token=... o ?oobCode=...)
   useEffect(() => {
@@ -65,7 +66,7 @@ export function ClientActivationPage({ onNavigate }: ClientActivationPageProps) 
         // 1. Prioridad: Token de activación TapRD (?token=...)
         if (tokenParam) {
           setActivationToken(tokenParam);
-          const result = await verifyActivationToken(tokenParam);
+          const result = await verifyActivationToken(tokenParam, emailParam || undefined);
           if (!isMounted) return;
 
           if (result.valid) {
@@ -125,7 +126,7 @@ export function ClientActivationPage({ onNavigate }: ClientActivationPageProps) 
   const hasNumber = /\d/.test(password);
   const hasLetter = /[a-zA-Z]/.test(password);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const isFormValid = isLengthValid && hasNumber && hasLetter && passwordsMatch && Boolean(email.trim());
+  const isFormValid = isLengthValid && hasNumber && hasLetter && passwordsMatch && Boolean(email.trim()) && termsAccepted;
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,6 +351,38 @@ export function ClientActivationPage({ onNavigate }: ClientActivationPageProps) 
                     {passwordsMatch ? 'Las contraseñas coinciden' : 'Las contraseñas no coinciden'}
                   </p>
                 )}
+              </div>
+
+              {/* Consentimiento Legal Explicito (PARTE 10 - Cumplimiento Legal) */}
+              <div className="pt-2">
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 cursor-pointer select-none group hover:border-slate-700 transition-colors">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-300 leading-relaxed">
+                    Al activar tu cuenta aceptas los{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onNavigate('/terminos'); }}
+                      className="text-blue-400 hover:text-blue-300 font-bold underline cursor-pointer"
+                    >
+                      Términos y condiciones
+                    </button>{' '}
+                    y reconoces la{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onNavigate('/privacidad'); }}
+                      className="text-blue-400 hover:text-blue-300 font-bold underline cursor-pointer"
+                    >
+                      Política de privacidad
+                    </button>{' '}
+                    de TapRD.
+                  </span>
+                </label>
               </div>
 
               {/* Botón Activar Cuenta */}

@@ -85,7 +85,7 @@ export function OneTouchFlow() {
             <p className="text-center text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-6">
               El cliente elige qué acción realizar inmediatamente
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-3.5">
               {destinations.map((dest, i) => {
                 const Icon = dest.icon;
                 return (

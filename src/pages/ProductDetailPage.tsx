@@ -81,11 +81,16 @@ export function ProductDetailPage({ product, onNavigate, onOpenDemo }: ProductDe
           </nav>
 
           {/* Hero Section: Title, Subtitle, Large Mockup & CTAs */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-6 sm:p-10 mb-10 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 sm:p-8 lg:p-10 mb-10 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
               
-              {/* Product Info Column */}
-              <div className="lg:col-span-7 space-y-4">
+              {/* Product Visual Mockup Column (Mobile: 1st / Desktop: Left) */}
+              <div className="order-1 lg:order-1 lg:col-span-5 flex items-center justify-center bg-gradient-to-b from-slate-50/80 to-blue-50/40 dark:from-slate-800/80 dark:to-slate-900/60 rounded-2xl p-6 sm:p-8 border border-slate-100 dark:border-slate-800">
+                <ProductMockup type={product.iconType} size="lg" />
+              </div>
+
+              {/* Product Info Column (Mobile: 2nd / Desktop: Right) */}
+              <div className="order-2 lg:order-2 lg:col-span-7 space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-900/60">
                     {product.category}
@@ -97,20 +102,16 @@ export function ProductDetailPage({ product, onNavigate, onOpenDemo }: ProductDe
                   )}
                 </div>
 
-                <h1 className="text-3xl sm:text-5xl font-black text-slate-950 dark:text-white tracking-tight">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 dark:text-white tracking-tight">
                   {product.name}
                 </h1>
 
-                <p className="text-lg sm:text-xl font-bold text-blue-600 dark:text-blue-400 leading-snug">
+                <p className="text-base sm:text-xl font-bold text-blue-600 dark:text-blue-400 leading-snug">
                   {product.tagline}
                 </p>
 
-                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
-                  {product.description}
-                </p>
-
                 {/* Price Display */}
-                <div className="pt-2 pb-1">
+                <div className="pt-1 pb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
                     Precio de inversión
                   </span>
@@ -122,12 +123,33 @@ export function ProductDetailPage({ product, onNavigate, onOpenDemo }: ProductDe
                   </p>
                 </div>
 
-                {/* Primary Action Buttons */}
+                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
+                  {product.description}
+                </p>
+
+                {/* Características clave destacadas */}
+                {product.features && product.features.length > 0 && (
+                  <div className="pt-2 pb-1 space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Características principales:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700 dark:text-slate-300">
+                      {product.features.slice(0, 4).map((feat, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Primary Action Buttons (CTA) */}
                 <div className="pt-4 flex flex-col sm:flex-row gap-3">
                   <button
                     type="button"
                     onClick={() => setModalOpen(true)}
-                    className="flex-1 py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    className="flex-1 min-h-[48px] py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-black text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     <span>Solicitar ahora</span>
@@ -136,7 +158,7 @@ export function ProductDetailPage({ product, onNavigate, onOpenDemo }: ProductDe
                   <button
                     type="button"
                     onClick={handleWhatsApp}
-                    className="py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2.5 transition-all cursor-pointer shrink-0"
+                    className="min-h-[48px] py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2.5 transition-all cursor-pointer shrink-0"
                   >
                     <MessageCircle className="w-4 h-4 fill-white" />
                     <span>Solicitar por WhatsApp</span>
@@ -155,11 +177,6 @@ export function ProductDetailPage({ product, onNavigate, onOpenDemo }: ProductDe
                   </div>
                 </div>
 
-              </div>
-
-              {/* Large Visual Mockup Column */}
-              <div className="lg:col-span-5 flex items-center justify-center bg-gradient-to-b from-slate-50/80 to-blue-50/40 dark:from-slate-800/80 dark:to-slate-900/60 rounded-2xl p-4 sm:p-6 border border-slate-100 dark:border-slate-800">
-                <ProductMockup type={product.iconType} size="lg" />
               </div>
 
             </div>

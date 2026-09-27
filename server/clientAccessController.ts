@@ -17,6 +17,12 @@ interface AuthContext {
  * Verifica el token Bearer del solicitante y corrobora sus permisos administrativos.
  * Regla 4: Las custom claims y roles administrativos se verifican rigurosamente en backend.
  */
+function encodeTokenPayload(payload: { c: string; e: string; b?: string; o?: string; x: number; r: string }): string {
+  const json = JSON.stringify(payload);
+  const base64 = Buffer.from(json, 'utf8').toString('base64url');
+  return `act_${base64}`;
+}
+
 async function verifyAdminAuth(req: Request): Promise<AuthContext | null> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -50,7 +56,7 @@ async function verifyAdminAuth(req: Request): Promise<AuthContext | null> {
         } catch {}
       }
 
-      if (role === 'admin' || role === 'superadmin') {
+      if (role === 'admin' || role === 'superadmin' || role === 'ADMIN') {
         return {
           uid: decoded.uid,
           email,
@@ -59,57 +65,9 @@ async function verifyAdminAuth(req: Request): Promise<AuthContext | null> {
       }
       return null;
     } catch (err) {
-      console.warn('[AdminAuth] Error verificando idToken con Admin SDK:', err);
+      console.warn('[AdminAuth] Token inválido o expirado al verificar con Firebase:', err);
+      return null;
     }
-  }
-
-  // Verificación de token JWT en modo seguro / passthrough (sin SDK Admin o en fallback)
-  if (token) {
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        const nowSec = Math.floor(Date.now() / 1000);
-        if (!payload.exp || payload.exp > nowSec) {
-          const email = (payload.email || '').toLowerCase();
-          const uid = payload.user_id || payload.sub || '';
-          let role = (payload.role as string) || '';
-
-          if (email === 'wilsonabelinobrito@gmail.com' || email.endsWith('@taprd.com')) {
-            role = 'superadmin';
-          }
-
-          if (role === 'admin' || role === 'superadmin') {
-            return {
-              uid: uid || 'admin-user',
-              email: email || 'wilsonabelinobrito@gmail.com',
-              role
-            };
-          }
-        }
-      }
-    } catch (jwtErr) {
-      console.warn('[AdminAuth] Error analizando JWT token:', jwtErr);
-    }
-  }
-
-  // Modo desarrollo / sesión local autenticada de fallback
-  // Permite funcionamiento durante testing local si el admin está logueado en frontend
-  const devAdminHeader = req.headers['x-admin-role'];
-  const devAdminEmail = ((req.headers['x-admin-email'] as string) || '').toLowerCase();
-  const devAdminUid = req.headers['x-admin-uid'] as string;
-
-  if (
-    devAdminHeader === 'admin' || 
-    devAdminHeader === 'superadmin' || 
-    devAdminEmail === 'wilsonabelinobrito@gmail.com' ||
-    devAdminEmail.endsWith('@taprd.com')
-  ) {
-    return {
-      uid: devAdminUid || 'admin-local',
-      email: devAdminEmail || 'wilsonabelinobrito@gmail.com',
-      role: (devAdminHeader as string) || 'superadmin'
-    };
   }
 
   return null;
@@ -250,9 +208,17 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
     }
 
     const nowIso = new Date().toISOString();
-    const activationToken = crypto.randomBytes(24).toString('hex');
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const activationToken = encodeTokenPayload({
+      c: clientId,
+      e: cleanEmail,
+      b: clientData.businessName || ownerName || 'Cliente TapRD',
+      o: ownerName || clientData.businessName,
+      x: expiresAt,
+      r: crypto.randomBytes(12).toString('hex')
+    });
     const origin = `${req.protocol}://${req.get('host')}`;
-    const customActivationLink = `${origin}/activar?token=${activationToken}`;
+    const customActivationLink = `${origin}/activar?token=${encodeURIComponent(activationToken)}&email=${encodeURIComponent(cleanEmail)}`;
 
     // 10. Crear documento en colección users/{uid} (Regla 6)
     const userDocData = {
@@ -400,9 +366,16 @@ export async function resendClientInvitationHandler(req: Request, res: Response)
     let customActivationLink: string | null = null;
 
     if (clientEmail) {
-      const activationToken = crypto.randomBytes(24).toString('hex');
+      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      const activationToken = encodeTokenPayload({
+        c: clientId,
+        e: clientEmail,
+        b: 'Cliente TapRD',
+        x: expiresAt,
+        r: crypto.randomBytes(12).toString('hex')
+      });
       const origin = `${req.protocol}://${req.get('host')}`;
-      customActivationLink = `${origin}/activar?token=${activationToken}`;
+      customActivationLink = `${origin}/activar?token=${encodeURIComponent(activationToken)}&email=${encodeURIComponent(clientEmail)}`;
 
       if (isConfigured && db) {
         try {

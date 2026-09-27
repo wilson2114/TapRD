@@ -12,8 +12,11 @@ import {
   Briefcase, 
   DollarSign, 
   Layers,
-  X
+  X,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
+import { canCreate, getLimit, getRemaining } from '../../services/limitService';
 
 interface ClientServicesPageProps {
   onNavigate: (path: string) => void;
@@ -40,9 +43,18 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
 
   if (!client) return null;
 
+  const maxServices = getLimit(client, 'maxServices');
+  const canAddMore = canCreate(client, 'maxServices', services.length);
+  const remaining = getRemaining(client, 'maxServices', services.length);
+
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newServiceName.trim()) return;
+
+    if (!canAddMore) {
+      setErrorMessage(`Has alcanzado el límite de ${maxServices} servicios de tu plan.`);
+      return;
+    }
 
     const newService: ClientService = {
       id: `srv-${Date.now()}`,
@@ -142,61 +154,101 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
 
         {/* Formulario para Agregar Nuevo Servicio */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Plus className="w-4 h-4" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <Plus className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900 dark:text-white">Agregar un Nuevo Servicio</h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Ingresa el título, descripción breve y precio aproximado.</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-black text-slate-900 dark:text-white">Agregar un Nuevo Servicio</h2>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Ingresa el título, descripción breve y precio aproximado.</p>
+
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className={`px-2.5 py-1 rounded-xl text-[11px] font-bold ${
+                !canAddMore 
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800' 
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+              }`}>
+                {services.length} / {maxServices === null ? '∞' : maxServices} servicios
+              </span>
             </div>
           </div>
 
-          <form onSubmit={handleAddService} className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
-            <div className="sm:col-span-5 space-y-1 text-left">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nombre del servicio *</label>
-              <input
-                type="text"
-                required
-                value={newServiceName}
-                onChange={(e) => setNewServiceName(e.target.value)}
-                placeholder="Ej. Corte Clásico + Barba"
-                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium"
-              />
-            </div>
+          {!canAddMore ? (
+            /* Requirement 33: Has alcanzado el límite de servicios de tu plan. Botón: Ver planes */
+            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-black text-amber-900 dark:text-amber-200">
+                    Has alcanzado el límite de servicios de tu plan.
+                  </p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                    Tu plan actual ({client.plan?.toUpperCase() || 'STARTER'}) permite hasta {maxServices} servicios activos.
+                  </p>
+                </div>
+              </div>
 
-            <div className="sm:col-span-4 space-y-1 text-left">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Precio</label>
-              <input
-                type="text"
-                value={newServicePrice}
-                onChange={(e) => setNewServicePrice(e.target.value)}
-                placeholder="RD$ 600"
-                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium font-mono"
-              />
-            </div>
-
-            <div className="sm:col-span-3 flex items-end">
               <button
-                type="submit"
-                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-transparent dark:border-slate-700"
+                type="button"
+                onClick={() => onNavigate('/planes')}
+                className="py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shrink-0 shadow-xs transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4 text-cyan-400" />
-                <span>Añadir a la lista</span>
+                <span>Ver planes</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
+          ) : (
+            <form onSubmit={handleAddService} className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
+              <div className="sm:col-span-5 space-y-1 text-left">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nombre del servicio *</label>
+                <input
+                  type="text"
+                  required
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  placeholder="Ej. Corte Clásico + Barba"
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium"
+                />
+              </div>
 
-            <div className="sm:col-span-12 space-y-1 text-left">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Descripción detallada (opcional)</label>
-              <input
-                type="text"
-                value={newServiceDesc}
-                onChange={(e) => setNewServiceDesc(e.target.value)}
-                placeholder="Lavado incluido, perfilado de navaja y toalla caliente..."
-                className="w-full py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium"
-              />
-            </div>
-          </form>
+              <div className="sm:col-span-4 space-y-1 text-left">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Precio</label>
+                <input
+                  type="text"
+                  value={newServicePrice}
+                  onChange={(e) => setNewServicePrice(e.target.value)}
+                  placeholder="RD$ 600"
+                  className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-3 flex items-end">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-transparent dark:border-slate-700"
+                >
+                  <Plus className="w-4 h-4 text-cyan-400" />
+                  <span>Añadir a la lista</span>
+                </button>
+              </div>
+
+              <div className="sm:col-span-12 space-y-1 text-left">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Descripción detallada (opcional)</label>
+                <input
+                  type="text"
+                  value={newServiceDesc}
+                  onChange={(e) => setNewServiceDesc(e.target.value)}
+                  placeholder="Ej. Incluye lavado capilar, perfilado con navaja caliente y toalla mentolada."
+                  className="w-full py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium"
+                />
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Lista de Servicios Actuales */}

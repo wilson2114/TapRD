@@ -19,7 +19,7 @@ export function NfcTouchDemo({ onOpenDemoProfile }: NfcTouchDemoProps) {
   return (
     <div
       id="nfc-interactive-simulator"
-      className="relative w-full max-w-[430px] mx-auto p-6 sm:p-7 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-blue-900/10 overflow-hidden"
+      className="relative w-full max-w-[430px] mx-auto p-4 sm:p-6 md:p-7 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl shadow-blue-900/10 overflow-hidden"
     >
       {/* Decorative ambient subtle glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -143,12 +143,12 @@ export function NfcTouchDemo({ onOpenDemoProfile }: NfcTouchDemoProps) {
 
         {/* Floating NFC Metallic Business Card */}
         <div
-          className={`absolute z-20 w-46 h-28 rounded-2xl p-3.5 text-white transition-all duration-700 ease-out transform shadow-2xl cursor-pointer card-metallic-dark ${
+          className={`absolute z-20 w-44 sm:w-46 h-28 rounded-2xl p-3.5 text-white transition-all duration-700 ease-out transform shadow-2xl cursor-pointer card-metallic-dark ${
             tapActive
               ? 'translate-x-2 -translate-y-9 rotate-6 scale-105 shadow-cyan-500/40 ring-2 ring-cyan-400'
               : isHovered
-              ? 'translate-x-14 -translate-y-5 rotate-12 scale-100 shadow-blue-900/50 ring-1 ring-blue-500/40'
-              : 'translate-x-20 -translate-y-2 rotate-12 shadow-slate-900/60 ring-1 ring-slate-700'
+              ? 'translate-x-8 sm:translate-x-14 -translate-y-5 rotate-12 scale-100 shadow-blue-900/50 ring-1 ring-blue-500/40'
+              : 'translate-x-10 sm:translate-x-20 -translate-y-2 rotate-12 shadow-slate-900/60 ring-1 ring-slate-700'
           }`}
         >
           {/* Card Details & Microchip */}
@@ -185,7 +185,7 @@ export function NfcTouchDemo({ onOpenDemoProfile }: NfcTouchDemoProps) {
         <button
           type="button"
           onClick={handleSimulateTap}
-          className="inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 active:scale-95 transition-all cursor-pointer"
+          className="min-h-[44px] px-3 py-2 rounded-xl inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 active:scale-95 transition-all cursor-pointer"
         >
           <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping" />
           <span>Simular toque NFC</span>
@@ -195,10 +195,10 @@ export function NfcTouchDemo({ onOpenDemoProfile }: NfcTouchDemoProps) {
           <button
             type="button"
             onClick={onOpenDemoProfile}
-            className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-colors cursor-pointer"
+            className="min-h-[44px] px-3 py-2 rounded-xl inline-flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-colors cursor-pointer text-center"
           >
             <span>Ver perfil en pantalla completa</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
           </button>
         )}
       </div>

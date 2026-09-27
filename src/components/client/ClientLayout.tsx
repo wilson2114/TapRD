@@ -17,7 +17,11 @@ import {
   Sparkles,
   CheckCircle2,
   ChevronRight,
-  User
+  User,
+  BarChart3,
+  CreditCard,
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { PUBLIC_BASE_URL } from '../../config/constants';
 
@@ -73,10 +77,34 @@ export function ClientLayout({
       badge: null
     },
     {
+      label: 'Estadísticas & Métricas',
+      path: '/cliente/analytics',
+      icon: BarChart3,
+      badge: null
+    },
+    {
       label: 'Código QR & NFC',
       path: '/cliente/qr',
       icon: QrCode,
       badge: 'NFC'
+    },
+    {
+      label: 'Configuración & Plan',
+      path: '/cliente/configuracion',
+      icon: CreditCard,
+      badge: client?.plan ? client.plan.toUpperCase() : null
+    },
+    {
+      label: 'Mi Contrato',
+      path: '/cliente/contrato',
+      icon: FileText,
+      badge: null
+    },
+    {
+      label: 'Privacidad ARCO',
+      path: '/cliente/privacidad',
+      icon: ShieldCheck,
+      badge: null
     },
     {
       label: 'Soporte TapRD',
@@ -106,7 +134,7 @@ export function ClientLayout({
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              className="lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               aria-label="Abrir menú"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -179,7 +207,7 @@ export function ClientLayout({
             <button
               type="button"
               onClick={handleLogout}
-              className="p-2 sm:py-1.5 sm:px-3 rounded-xl text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5"
+              className="p-2 sm:py-2 sm:px-3 rounded-xl text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1.5 min-h-[44px]"
               title="Cerrar sesión"
             >
               <LogOut className="w-4 h-4" />
@@ -324,7 +352,7 @@ export function ClientLayout({
                         setMobileMenuOpen(false);
                         onNavigate(item.path);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                      className={`w-full min-h-[44px] flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                         isActive
                           ? 'bg-blue-600 text-white'
                           : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -348,7 +376,7 @@ export function ClientLayout({
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
+                  className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Cerrar sesión</span>

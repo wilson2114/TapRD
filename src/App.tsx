@@ -26,7 +26,33 @@ import { ClientHoursPage } from './pages/client/ClientHoursPage';
 import { ClientSocialsPage } from './pages/client/ClientSocialsPage';
 import { ClientQrPage } from './pages/client/ClientQrPage';
 import { ClientSupportPage } from './pages/client/ClientSupportPage';
+import { ClientSettingsPage } from './pages/client/ClientSettingsPage';
+import { ClientAnalyticsPage } from './pages/client/ClientAnalyticsPage';
 import { ClientRoute } from './components/client/ClientRoute';
+
+// Plans & Pricing Pages (Parte 9)
+import { PlansPage } from './pages/PlansPage';
+import { ComparePlansPage } from './pages/ComparePlansPage';
+import { AdminPlansPage } from './pages/admin/AdminPlansPage';
+import { AdminPlanFormPage } from './pages/admin/AdminPlanFormPage';
+
+// Legal & Compliance Pages (Parte 10)
+import { TermsPage } from './pages/legal/TermsPage';
+import { PrivacyPage } from './pages/legal/PrivacyPage';
+import { CookiesPage } from './pages/legal/CookiesPage';
+import { CancellationPolicyPage } from './pages/legal/CancellationPolicyPage';
+import { RefundPolicyPage } from './pages/legal/RefundPolicyPage';
+import { LegalNoticePage } from './pages/legal/LegalNoticePage';
+import { AcceptableUsePage } from './pages/legal/AcceptableUsePage';
+import { ContactPage } from './pages/legal/ContactPage';
+
+// Client Legal & Contract Pages (Parte 10)
+import { ClientPrivacyPage } from './pages/client/ClientPrivacyPage';
+import { ClientContractPage } from './pages/client/ClientContractPage';
+
+// Admin Moderation & Privacy Pages (Parte 10)
+import { AdminReportsPage } from './pages/admin/AdminReportsPage';
+import { AdminPrivacyPage } from './pages/admin/AdminPrivacyPage';
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -130,10 +156,21 @@ export default function App() {
         adminContent = <AdminClientFormPage clientId={clientId} onNavigate={navigate} />;
       } else if (currentPath === '/admin/clientes' || currentPath === '/admin/clientes/') {
         adminContent = <AdminClientsPage onNavigate={navigate} />;
+      } else if (currentPath === '/admin/planes/nuevo' || currentPath === '/admin/planes/nuevo/') {
+        adminContent = <AdminPlanFormPage onNavigate={navigate} />;
+      } else if (currentPath.startsWith('/admin/planes/') && currentPath !== '/admin/planes/') {
+        const planId = currentPath.replace(/^\/admin\/planes\//, '').replace(/\/$/, '');
+        adminContent = <AdminPlanFormPage planId={planId} onNavigate={navigate} />;
+      } else if (currentPath === '/admin/planes' || currentPath === '/admin/planes/') {
+        adminContent = <AdminPlansPage onNavigate={navigate} />;
       } else if (currentPath === '/admin/perfiles' || currentPath === '/admin/perfiles/') {
         adminContent = <AdminProfilesPage onNavigate={navigate} />;
       } else if (currentPath === '/admin/productos' || currentPath === '/admin/productos/') {
         adminContent = <AdminProductsPage onNavigate={navigate} />;
+      } else if (currentPath === '/admin/reportes' || currentPath === '/admin/reportes/') {
+        adminContent = <AdminReportsPage onNavigate={navigate} />;
+      } else if (currentPath === '/admin/privacidad' || currentPath === '/admin/privacidad/') {
+        adminContent = <AdminPrivacyPage onNavigate={navigate} />;
       } else if (currentPath === '/admin/configuracion' || currentPath === '/admin/configuracion/') {
         adminContent = <AdminSettingsPage onNavigate={navigate} />;
       } else {
@@ -163,10 +200,18 @@ export default function App() {
       clientContent = <ClientSocialsPage onNavigate={navigate} />;
     } else if (currentPath === '/cliente/qr' || currentPath === '/cliente/qr/') {
       clientContent = <ClientQrPage onNavigate={navigate} />;
+    } else if (currentPath === '/cliente/configuracion' || currentPath === '/cliente/configuracion/') {
+      clientContent = <ClientSettingsPage onNavigate={navigate} />;
+    } else if (currentPath === '/cliente/analytics' || currentPath === '/cliente/analytics/') {
+      clientContent = <ClientAnalyticsPage onNavigate={navigate} />;
     } else if (currentPath === '/cliente/soporte' || currentPath === '/cliente/soporte/') {
       clientContent = <ClientSupportPage onNavigate={navigate} />;
+    } else if (currentPath === '/cliente/privacidad' || currentPath === '/cliente/privacidad/') {
+      clientContent = <ClientPrivacyPage onNavigate={navigate} />;
+    } else if (currentPath === '/cliente/contrato' || currentPath === '/cliente/contrato/') {
+      clientContent = <ClientContractPage onNavigate={navigate} />;
     } else {
-      // Default: /cliente/dashboard or /cliente
+      // Default: /cliente/dashboard o /cliente
       clientContent = <ClientDashboardPage onNavigate={navigate} />;
     }
 
@@ -174,8 +219,47 @@ export default function App() {
   }
 
   // =========================================================================
-  // PUBLIC & COMMERCE ROUTES (Partes 1-4 intactas)
+  // LEGAL & COMPLIANCE ROUTES (Parte 10)
   // =========================================================================
+
+  if (currentPath === '/terminos' || currentPath === '/terminos/') {
+    return <TermsPage onNavigate={navigate} />;
+  }
+  if (currentPath === '/privacidad' || currentPath === '/privacidad/') {
+    return <PrivacyPage onNavigate={navigate} />;
+  }
+  if (currentPath === '/cookies' || currentPath === '/cookies/') {
+    return <CookiesPage onNavigate={navigate} />;
+  }
+  if (currentPath === '/politica-cancelacion' || currentPath === '/politica-cancelacion/') {
+    return <CancellationPolicyPage onNavigate={navigate} />;
+  }
+  if (currentPath === '/politica-reembolso' || currentPath === '/politica-reembolso/') {
+    return <RefundPolicyPage onNavigate={navigate} />;
+  }
+  if (currentPath === '/aviso-legal' || currentPath === '/aviso-legal/') {
+    return <LegalNoticePage onNavigate={navigate} />;
+  }
+  if (currentPath === '/uso-aceptable' || currentPath === '/uso-aceptable/') {
+    return <AcceptableUsePage onNavigate={navigate} />;
+  }
+  if (currentPath === '/contacto' || currentPath === '/contacto/') {
+    return <ContactPage onNavigate={navigate} />;
+  }
+
+  // =========================================================================
+  // PUBLIC & COMMERCE ROUTES (Partes 1-4 intactas + Planes)
+  // =========================================================================
+
+  // Route: Planes y Precios (/planes)
+  if (currentPath === '/planes' || currentPath === '/planes/') {
+    return <PlansPage onNavigate={navigate} />;
+  }
+
+  // Route: Comparar Planes (/planes/comparar)
+  if (currentPath === '/planes/comparar' || currentPath === '/planes/comparar/') {
+    return <ComparePlansPage onNavigate={navigate} />;
+  }
 
   // Route: Individual product page (/productos/:slug)
   if (currentPath.startsWith('/productos/') && currentPath !== '/productos/') {

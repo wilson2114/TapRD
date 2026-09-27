@@ -69,18 +69,25 @@ export function getFirebaseAdmin() {
       }
     }
 
-    // Si no se cuenta con FIREBASE_SERVICE_ACCOUNT_KEY explícita, no activar Admin SDK remoto
-    // para evitar fallos gRPC (PERMISSION_DENIED) en entornos sin IAM del proyecto
-    initFailed = true;
-    console.log('[FirebaseAdmin] Modo seguro activado: Admin SDK en fallback (sin FIREBASE_SERVICE_ACCOUNT_KEY)');
+    // Inicialización estándar con projectId para verificación segura de ID tokens
+    adminApp = initializeApp({
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'taprd-16064'
+    });
+    adminAuth = getAuth(adminApp);
+    try {
+      adminDb = getFirestore(adminApp);
+    } catch {
+      adminDb = null;
+    }
+    console.log('[FirebaseAdmin] Inicializado en modo de verificación de ID tokens con Project ID taprd-16064');
     return {
-      app: null,
-      auth: null as any,
-      db: null as any,
-      isConfigured: false
+      app: adminApp,
+      auth: adminAuth,
+      db: adminDb,
+      isConfigured: true
     };
   } catch (err: any) {
-    console.warn('[FirebaseAdmin] Aviso inicializando Admin SDK (modo fallback activo):', err.message || err);
+    console.warn('[FirebaseAdmin] Aviso inicializando Admin SDK:', err.message || err);
     initFailed = true;
     return {
       app: null,

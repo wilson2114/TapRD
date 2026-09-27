@@ -86,7 +86,7 @@ export function BusinessCategoryCard({ categories, onOpenDemo }: BusinessCategor
                   <button
                     type="button"
                     onClick={() => onOpenDemo(cat.demoSlug!)}
-                    className="inline-flex items-center text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 group-hover:underline pt-3 border-t border-slate-200/60 dark:border-slate-800 cursor-pointer"
+                    className="inline-flex items-center min-h-[44px] text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 group-hover:underline pt-3 border-t border-slate-200/60 dark:border-slate-800 cursor-pointer"
                   >
                     <span>Ver demo de esta categoría</span>
                     <ArrowRight className="w-3.5 h-3.5 ml-1" />

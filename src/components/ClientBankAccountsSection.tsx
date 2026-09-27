@@ -127,7 +127,7 @@ export function ClientBankAccountsSection({
                 <button
                   type="button"
                   onClick={() => handleCopy(acc.accountNumber, accNumberKey)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                     copiedKey === accNumberKey
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
@@ -174,12 +174,13 @@ export function ClientBankAccountsSection({
                     <button
                       type="button"
                       onClick={() => handleCopy(acc.rncOrCedula!, rncKey)}
-                      className={`p-1.5 rounded-lg text-xs transition-colors shrink-0 cursor-pointer ${
+                      className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-xs transition-colors shrink-0 cursor-pointer ${
                         copiedKey === rncKey
                           ? 'bg-emerald-600 text-white'
                           : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                       }`}
                       title="Copiar RNC / Cédula"
+                      aria-label="Copiar RNC o Cédula"
                     >
                       {copiedKey === rncKey ? (
                         <Check className="w-3.5 h-3.5" />

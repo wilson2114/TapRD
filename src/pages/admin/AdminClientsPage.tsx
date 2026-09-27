@@ -537,56 +537,56 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                     </div>
 
                     {/* Quick Mobile Action Bar */}
-                    <div className="grid grid-cols-5 gap-1.5 pt-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => handleCopyLink(client.slug, client.id)}
-                        className="py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        className="min-h-[44px] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                         title="Copiar enlace"
                       >
-                        {copiedId === client.id ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span className="hidden sm:inline">Copiar</span>
+                        {copiedId === client.id ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        <span>Copiar link</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleInviteClient(client)}
-                        className="py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        className="min-h-[44px] py-2 px-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                         title="Reenviar invitación de activación"
                       >
-                        <Send className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Invitar</span>
+                        <Send className="w-4 h-4" />
+                        <span>Invitar</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
-                        className="py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        className="min-h-[44px] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <Edit3 className="w-4 h-4" />
                         <span>Editar</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => onNavigate(`/p/${client.slug}`)}
-                        className="py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        className="min-h-[44px] py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Ver</span>
+                        <ExternalLink className="w-4 h-4" />
+                        <span>Ver perfil</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(client)}
-                        className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer ${
+                        className={`col-span-2 sm:col-span-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                           client.status === 'active'
-                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-                            : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                            : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
                         }`}
                       >
-                        <Power className="w-3.5 h-3.5" />
-                        <span>{client.status === 'active' ? 'Pausar' : 'Activar'}</span>
+                        <Power className="w-4 h-4" />
+                        <span>{client.status === 'active' ? 'Pausar perfil' : 'Activar perfil'}</span>
                       </button>
                     </div>
                   </div>

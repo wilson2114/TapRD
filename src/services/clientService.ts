@@ -12,6 +12,7 @@ import {
 import { db, isFirebaseConfigured, auth } from '../lib/firebase';
 import { Client, ClientStatus, ClientService } from '../types/client';
 import { INITIAL_CLIENTS } from '../data/initialClients';
+import { COMPANY_CONFIG } from '../config/company';
 
 const COLLECTION_NAME = 'clients';
 const LOCAL_STORAGE_KEY = 'taprd_clients_data_v2';
@@ -396,7 +397,14 @@ export async function createClient(
     status: data.status || 'active',
     createdBy: currentUserId,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    // Cumplimiento Legal y Separación de Estados (PARTE 10)
+    termsVersion: COMPANY_CONFIG.termsVersion,
+    privacyVersion: COMPANY_CONFIG.privacyVersion,
+    accountStatus: 'active',
+    profileStatus: data.status === 'inactive' ? 'inactive' : 'active',
+    contractStatus: data.contractStatus || 'draft',
+    contractVersion: data.contractVersion || COMPANY_CONFIG.termsVersion
   };
 
   // 1. Guardar en memoria local inmediata

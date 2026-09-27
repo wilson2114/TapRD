@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   LogIn, 
   UserPlus, 
@@ -41,16 +42,16 @@ export function MobileMenu({
   // Prevent background body scroll when mobile menu is open
   useEffect(() => {
     if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [isOpen]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const handleLinkClick = (path: string) => {
     onClose();
@@ -80,10 +81,10 @@ export function MobileMenu({
     return name.slice(0, 2).toUpperCase();
   };
 
-  return (
+  return createPortal(
     <div 
       id="mobile-menu-overlay"
-      className="fixed inset-0 z-50 lg:hidden flex flex-col justify-start"
+      className="fixed inset-0 z-40 lg:hidden flex flex-col justify-start"
       role="dialog"
       aria-modal="true"
       aria-label="Menú de navegación móvil"
@@ -98,11 +99,28 @@ export function MobileMenu({
       {/* Contenedor del Drawer */}
       <div 
         id="mobile-drawer-content"
-        className="relative w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xl z-10 max-h-[calc(100dvh-4.5rem)] mt-16 sm:mt-20 overflow-y-auto overscroll-contain flex flex-col"
+        className="relative w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xl z-10 max-h-[calc(100dvh-4rem)] sm:max-h-[calc(100dvh-5rem)] mt-16 sm:mt-20 overflow-y-auto overscroll-contain flex flex-col animate-in slide-in-from-top-2 duration-150"
         style={{
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))'
         }}
       >
+        {/* Cabecera del Menú Móvil con Botón Cerrar */}
+        <div className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            Navegación Móvil
+          </span>
+          <button
+            id="btn-mobile-drawer-close-top"
+            type="button"
+            onClick={onClose}
+            className="min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+            aria-label="Cerrar menú móvil"
+          >
+            <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <span>Cerrar menú</span>
+          </button>
+        </div>
+
         {/* ================================================================= */}
         {/* SECCIÓN 1: SESIÓN / AUTENTICACIÓN                                */}
         {/* ================================================================= */}
@@ -238,6 +256,20 @@ export function MobileMenu({
           </button>
 
           <button
+            id="mobile-nav-planes"
+            type="button"
+            onClick={() => handleLinkClick('/planes')}
+            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-left text-sm font-bold flex items-center justify-between transition-colors ${
+              currentPath.startsWith('/planes')
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <span>Planes & Suscripciones</span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+
+          <button
             id="mobile-nav-como-funciona"
             type="button"
             onClick={() => handleLinkClick('/#como-funciona')}
@@ -264,6 +296,20 @@ export function MobileMenu({
             className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-left text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between transition-colors"
           >
             <span>Preguntas frecuentes</span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+
+          <button
+            id="mobile-nav-contacto"
+            type="button"
+            onClick={() => handleLinkClick('/contacto')}
+            className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl text-left text-sm font-bold flex items-center justify-between transition-colors ${
+              currentPath === '/contacto'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <span>Contacto</span>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
         </div>
@@ -335,8 +381,20 @@ export function MobileMenu({
             </span>
             <span>Santo Domingo, RD 🇩🇴</span>
           </div>
+
+          {/* Botón explícito para Cerrar Menú */}
+          <button
+            id="btn-mobile-drawer-close-bottom"
+            type="button"
+            onClick={onClose}
+            className="w-full min-h-[44px] py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+            <span>Cerrar menú</span>
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

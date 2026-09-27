@@ -1,6 +1,16 @@
 export type ClientStatus = 'active' | 'pending' | 'inactive';
-export type ClientPlan = 'starter' | 'business' | 'pro';
-export type ClientSubscriptionStatus = 'active' | 'pending' | 'expired' | 'cancelled';
+export type ClientAccountStatus = 'active' | 'inactive' | 'suspended' | 'pending_deletion';
+export type ClientProfileStatus = 'active' | 'inactive' | 'suspended';
+export type ClientContractStatus = 'draft' | 'pending' | 'accepted' | 'signed' | 'expired' | 'cancelled';
+export type ClientPlan = 'starter' | 'business' | 'pro' | string;
+export type ClientSubscriptionStatus = 
+  | 'pending' 
+  | 'active' 
+  | 'past_due' 
+  | 'expired' 
+  | 'cancelled' 
+  | 'suspended' 
+  | 'trialing';
 export type ClientAccessStatus = 'none' | 'pending' | 'active' | 'suspended';
 
 export interface ClientPermissions {
@@ -124,12 +134,41 @@ export interface Client {
   userId?: string;
   clientEmail?: string;
   accessStatus?: ClientAccessStatus;
+  activationToken?: string;
   plan?: ClientPlan;
   subscriptionStatus?: ClientSubscriptionStatus;
+  subscriptionStartedAt?: string;
+  subscriptionExpiresAt?: string;
+  gracePeriodUntil?: string;
+  billingCycle?: 'monthly' | 'yearly';
+  paymentProvider?: string;
+  paymentCustomerId?: string;
+  paymentSubscriptionId?: string;
+  paymentStatus?: string;
+  amount?: number;
+  currency?: string;
+  lastPaymentAt?: string;
+  nextPaymentAt?: string;
   permissions?: ClientPermissions;
   productAssigned?: string;
   googleReviewsUrl?: string;
   mapsUrl?: string;
   viewsCount?: number;
   profileTheme?: 'light' | 'dark' | 'auto';
+  // Cumplimiento Legal y Separación de Estados (PARTE 10)
+  accountStatus?: ClientAccountStatus;
+  profileStatus?: ClientProfileStatus;
+  contractStatus?: ClientContractStatus;
+  contractVersion?: string;
+  contractAcceptedAt?: string;
+  contractSignedAt?: string;
+  contractExpiresAt?: string;
+  contractDocumentUrl?: string;
+  contractNotes?: string;
+  termsVersion?: string;
+  privacyVersion?: string;
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  termsAcceptedAt?: string;
+  privacyAcceptedAt?: string;
 }

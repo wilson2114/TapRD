@@ -13,7 +13,10 @@ import {
   ExternalLink, 
   Radio, 
   ChevronRight, 
-  Sparkles 
+  Sparkles,
+  CreditCard,
+  Flag,
+  ShieldCheck
 } from 'lucide-react';
 import { logoutAdmin, getCurrentAdminUser } from '../../services/adminAuthService';
 
@@ -118,6 +121,24 @@ export function AdminLayout({
       badge: undefined
     },
     {
+      label: 'Planes & Precios',
+      path: '/admin/planes',
+      icon: CreditCard,
+      badge: undefined
+    },
+    {
+      label: 'Reportes & Abuso',
+      path: '/admin/reportes',
+      icon: Flag,
+      badge: undefined
+    },
+    {
+      label: 'Privacidad ARCO',
+      path: '/admin/privacidad',
+      icon: ShieldCheck,
+      badge: undefined
+    },
+    {
       label: 'Configuración',
       path: '/admin/configuracion',
       icon: Settings,
@@ -155,6 +176,21 @@ export function AdminLayout({
     }
     if (norm === '/admin/productos') {
       return [{ label: 'Productos', path: '/admin/productos' }];
+    }
+    if (norm === '/admin/planes') {
+      return [{ label: 'Planes & Precios', path: '/admin/planes' }];
+    }
+    if (norm === '/admin/planes/nuevo') {
+      return [
+        { label: 'Planes & Precios', path: '/admin/planes' },
+        { label: 'Crear plan', path: '/admin/planes/nuevo' }
+      ];
+    }
+    if (norm.startsWith('/admin/planes/')) {
+      return [
+        { label: 'Planes & Precios', path: '/admin/planes' },
+        { label: 'Editar plan', path: norm }
+      ];
     }
     if (norm === '/admin/configuracion') {
       return [{ label: 'Configuración', path: '/admin/configuracion' }];
@@ -296,7 +332,7 @@ export function AdminLayout({
             id="btn-admin-mobile-logout"
             type="button"
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 text-rose-400 text-xs font-bold transition-all border border-rose-500/30 cursor-pointer min-h-[38px]"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 text-rose-400 text-xs font-bold transition-all border border-rose-500/30 cursor-pointer min-h-[44px]"
             title="Cerrar sesión"
             aria-label="Cerrar sesión"
           >
@@ -307,7 +343,7 @@ export function AdminLayout({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center"
+            className="p-2.5 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

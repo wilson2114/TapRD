@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loginAdmin, getCurrentUser, isAuthorizedAdminEmail } from '../../services/authService';
-import { ADMIN_DEMO_EMAIL, ADMIN_DEMO_PASSWORD } from '../../config/constants';
+import { ADMIN_DEMO_EMAIL } from '../../config/constants';
 import { SEOHead } from '../../components/SEOHead';
 import { 
   ArrowLeft, 
@@ -64,7 +64,6 @@ export function AdminLoginPage({ onNavigate }: AdminLoginPageProps) {
 
   const handleFillDemo = () => {
     setEmail(ADMIN_DEMO_EMAIL);
-    setPassword(ADMIN_DEMO_PASSWORD);
     setError(null);
   };
 
@@ -121,12 +120,12 @@ export function AdminLoginPage({ onNavigate }: AdminLoginPageProps) {
             </div>
           )}
 
-          {/* Notificación de credenciales DEMO */}
+          {/* Notificación de seguridad */}
           <div className="bg-blue-950/40 border border-blue-500/20 rounded-2xl p-3.5 sm:p-4 text-xs space-y-2">
             <div className="flex items-center justify-between text-blue-300 font-bold">
               <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>Acceso Rápido / Demo de Propietario</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                <span>Acceso Restringido a Administradores</span>
               </span>
               <button
                 id="btn-autocompletar-demo"
@@ -134,13 +133,12 @@ export function AdminLoginPage({ onNavigate }: AdminLoginPageProps) {
                 onClick={handleFillDemo}
                 className="text-[11px] font-black text-blue-400 hover:text-blue-300 underline cursor-pointer"
               >
-                Autocompletar
+                Completar correo
               </button>
             </div>
-            <div className="text-[11px] text-slate-400 font-mono space-y-1">
-              <p>Email: <span className="text-white font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">{ADMIN_DEMO_EMAIL}</span></p>
-              <p>Contraseña: <span className="text-white font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">{ADMIN_DEMO_PASSWORD}</span></p>
-            </div>
+            <p className="text-[11px] text-slate-400">
+              Autenticación oficial de TapRD. Introduce las credenciales autorizadas asignadas a tu cuenta.
+            </p>
           </div>
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">

@@ -46,7 +46,7 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
         <button
           type="button"
           onClick={() => window.open(profileUrl, '_blank')}
-          className="py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          className="min-h-[44px] py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
           <span>Probar perfil en vivo</span>
@@ -105,7 +105,7 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-sans text-xs font-bold shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="min-h-[44px] py-2 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-sans text-xs font-bold shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   {copiedUrl ? (
                     <>

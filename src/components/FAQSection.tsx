@@ -78,7 +78,7 @@ export function FAQSection({ onContactSupport }: FAQSectionProps) {
           <button
             type="button"
             onClick={onContactSupport}
-            className="inline-flex items-center gap-2 px-4.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 cursor-pointer"
+            className="min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 cursor-pointer"
           >
             <MessageCircle className="w-4 h-4" />
             <span>Consultar con un asesor</span>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   LogIn, 
@@ -13,7 +14,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { loginUser, isAuthorizedAdminEmail } from '../services/authService';
-import { ADMIN_DEMO_EMAIL, ADMIN_DEMO_PASSWORD } from '../config/constants';
+import { ADMIN_DEMO_EMAIL } from '../config/constants';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export function AuthModal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +91,6 @@ export function AuthModal({
 
   const handleFillDemo = () => {
     setEmail(ADMIN_DEMO_EMAIL);
-    setPassword(ADMIN_DEMO_PASSWORD);
     setError(null);
   };
 
@@ -100,7 +101,7 @@ export function AuthModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
       id="auth-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
@@ -348,6 +349,7 @@ export function AuthModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

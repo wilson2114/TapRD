@@ -44,8 +44,13 @@ import {
   suspendClientAccess,
   reactivateClientAccess
 } from '../../services/clientAccessService';
-import { ClientAccessStatus, ClientBankAccount } from '../../types/client';
+import { ClientAccessStatus, ClientBankAccount, ClientSubscriptionStatus, ClientContractStatus } from '../../types/client';
+import { COMPANY_CONFIG } from '../../config/company';
 import { DOMINICAN_BANKS, ACCOUNT_TYPES, CURRENCIES } from '../../config/bankConstants';
+import { getPlans } from '../../services/planService';
+import { logSubscriptionChange } from '../../services/subscriptionService';
+import { DEFAULT_PLANS } from '../../config/plans';
+import { Plan } from '../../types/plan';
 
 interface AdminClientFormPageProps {
   clientId?: string; // Si está presente, es modo edición
@@ -193,6 +198,39 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
   const [activationLink, setActivationLink] = useState<string | null>(null);
   const [copiedActivationLink, setCopiedActivationLink] = useState(false);
 
+  // Estados de Plan y Suscripción (Parte 9)
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>(DEFAULT_PLANS);
+  const [clientPlan, setClientPlan] = useState<string>('starter');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<ClientSubscriptionStatus>('active');
+  const [subscriptionStartedAt, setSubscriptionStartedAt] = useState<string>('');
+  const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string>('');
+  const [gracePeriodUntil, setGracePeriodUntil] = useState<string>('');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [paymentProvider, setPaymentProvider] = useState<string>('manual');
+  const [paymentCustomerId, setPaymentCustomerId] = useState<string>('');
+  const [paymentSubscriptionId, setPaymentSubscriptionId] = useState<string>('');
+  const [subChangeReason, setSubChangeReason] = useState<string>('');
+  const [initialPlan, setInitialPlan] = useState<string>('starter');
+  const [initialSubStatus, setInitialSubStatus] = useState<ClientSubscriptionStatus>('active');
+
+  // Estados de Contrato del Cliente (Parte 10 - Cumplimiento Legal)
+  const [contractStatus, setContractStatus] = useState<ClientContractStatus>('draft');
+  const [contractVersion, setContractVersion] = useState<string>(COMPANY_CONFIG.termsVersion);
+  const [contractAcceptedAt, setContractAcceptedAt] = useState<string>('');
+  const [contractSignedAt, setContractSignedAt] = useState<string>('');
+  const [contractExpiresAt, setContractExpiresAt] = useState<string>('');
+  const [contractDocumentUrl, setContractDocumentUrl] = useState<string>('');
+  const [contractNotes, setContractNotes] = useState<string>('');
+
+  // Cargar catálogo de planes disponibles
+  useEffect(() => {
+    getPlans().then((loaded) => {
+      if (loaded && loaded.length > 0) {
+        setAvailablePlans(loaded);
+      }
+    }).catch(console.warn);
+  }, []);
+
   // Cargar datos en modo edición
   useEffect(() => {
     if (clientId) {
@@ -221,6 +259,34 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
               showBankAccounts: found.settings.showBankAccounts !== false
             });
           }
+
+          // Cargar datos de plan y suscripción (Parte 9)
+          const planVal = found.plan || 'starter';
+          const subStatusVal = found.subscriptionStatus || 'active';
+          setClientPlan(planVal);
+          setInitialPlan(planVal);
+          setSubscriptionStatus(subStatusVal);
+          setInitialSubStatus(subStatusVal);
+          setSubscriptionStartedAt(
+            found.subscriptionStartedAt 
+              ? found.subscriptionStartedAt.substring(0, 10) 
+              : (found.createdAt ? found.createdAt.substring(0, 10) : new Date().toISOString().substring(0, 10))
+          );
+          setSubscriptionExpiresAt(found.subscriptionExpiresAt ? found.subscriptionExpiresAt.substring(0, 10) : '');
+          setGracePeriodUntil(found.gracePeriodUntil ? found.gracePeriodUntil.substring(0, 10) : '');
+          setBillingCycle((found.billingCycle as 'monthly' | 'yearly') || 'monthly');
+          setPaymentProvider(found.paymentProvider || 'manual');
+          setPaymentCustomerId(found.paymentCustomerId || '');
+          setPaymentSubscriptionId(found.paymentSubscriptionId || '');
+
+          // Cargar datos de Contrato del Cliente (Parte 10)
+          setContractStatus(found.contractStatus || 'draft');
+          setContractVersion(found.contractVersion || COMPANY_CONFIG.termsVersion);
+          setContractAcceptedAt(found.contractAcceptedAt ? found.contractAcceptedAt.substring(0, 10) : '');
+          setContractSignedAt(found.contractSignedAt ? found.contractSignedAt.substring(0, 10) : '');
+          setContractExpiresAt(found.contractExpiresAt ? found.contractExpiresAt.substring(0, 10) : '');
+          setContractDocumentUrl(found.contractDocumentUrl || '');
+          setContractNotes(found.contractNotes || '');
 
           // Cargar cuentas bancarias
           if (found.bankAccounts && found.bankAccounts.length > 0) {
@@ -690,12 +756,45 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
       bankAccounts,
       settings,
       status,
-      productAssigned
+      productAssigned,
+      // Campos de Plan y Suscripción (Parte 9)
+      plan: clientPlan,
+      subscriptionStatus,
+      subscriptionStartedAt: subscriptionStartedAt ? new Date(subscriptionStartedAt).toISOString() : new Date().toISOString(),
+      subscriptionExpiresAt: subscriptionExpiresAt ? new Date(subscriptionExpiresAt).toISOString() : undefined,
+      gracePeriodUntil: gracePeriodUntil ? new Date(gracePeriodUntil).toISOString() : undefined,
+      billingCycle,
+      paymentProvider: paymentProvider.trim(),
+      paymentCustomerId: paymentCustomerId.trim(),
+      paymentSubscriptionId: paymentSubscriptionId.trim(),
+      // Campos de Contrato del Cliente (Parte 10 - Cumplimiento Legal)
+      contractStatus,
+      contractVersion: contractVersion.trim() || COMPANY_CONFIG.termsVersion,
+      contractAcceptedAt: contractAcceptedAt ? new Date(contractAcceptedAt).toISOString() : undefined,
+      contractSignedAt: contractSignedAt ? new Date(contractSignedAt).toISOString() : undefined,
+      contractExpiresAt: contractExpiresAt ? new Date(contractExpiresAt).toISOString() : undefined,
+      contractDocumentUrl: contractDocumentUrl.trim(),
+      contractNotes: contractNotes.trim()
     };
 
     try {
       if (isEditing && clientId) {
         await updateClient(clientId, payload);
+
+        // Si el plan o estado de suscripción cambió, registrar auditoría
+        if (initialPlan !== clientPlan || initialSubStatus !== subscriptionStatus) {
+          const currentActor = auth.currentUser?.uid || 'admin';
+          await logSubscriptionChange({
+            clientId,
+            clientBusinessName: businessName.trim(),
+            previousPlan: initialPlan,
+            newPlan: clientPlan,
+            previousStatus: initialSubStatus,
+            newStatus: subscriptionStatus,
+            changedBy: currentActor,
+            reason: subChangeReason.trim() || 'Modificación manual desde panel de administración'
+          });
+        }
       } else {
         await createClient(payload);
       }
@@ -1926,12 +2025,201 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
         </div>
 
         {/* ----------------------------------------------------------------- */}
-        {/* SECCIÓN 8: CONFIGURACIÓN DE VISIBILIDAD DE BOTONES (Regla 9) */}
+        {/* SECCIÓN 8: PLAN Y SUSCRIPCIÓN (Parte 9) */}
+        {/* ----------------------------------------------------------------- */}
+        <div id="section-admin-subscription" className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  8. Plan y Suscripción
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                  Control Administrativo
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Gestiona manualmente el plan, ciclo de facturación, estado de acceso y vencimientos (Auditoría activa)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${
+                subscriptionStatus === 'active'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                  : subscriptionStatus === 'suspended' || subscriptionStatus === 'cancelled'
+                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300'
+                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+              }`}>
+                Estado: {subscriptionStatus}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            
+            {/* Plan Asignado */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Plan Asignado *
+              </label>
+              <select
+                value={clientPlan}
+                onChange={(e) => setClientPlan(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-bold focus:outline-hidden focus:border-blue-500"
+              >
+                {availablePlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.toUpperCase()} {p.price > 0 ? `(${p.currency}$ ${p.price.toLocaleString()}/${p.interval === 'yearly' ? 'año' : 'mes'})` : '(Gratis)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Estado de Suscripción */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Estado de la Suscripción *
+              </label>
+              <select
+                value={subscriptionStatus}
+                onChange={(e) => setSubscriptionStatus(e.target.value as ClientSubscriptionStatus)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-bold focus:outline-hidden focus:border-blue-500"
+              >
+                <option value="active">Activa (Acceso normal)</option>
+                <option value="pending">Pendiente de activación</option>
+                <option value="trialing">En período de prueba</option>
+                <option value="past_due">Atrasada / Pago pendiente</option>
+                <option value="suspended">Suspendida (Acceso bloqueado)</option>
+                <option value="expired">Expirada (Vencida)</option>
+                <option value="cancelled">Cancelada</option>
+              </select>
+            </div>
+
+            {/* Ciclo de Facturación */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Ciclo de Facturación
+              </label>
+              <select
+                value={billingCycle}
+                onChange={(e) => setBillingCycle(e.target.value as 'monthly' | 'yearly')}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              >
+                <option value="monthly">Mensual</option>
+                <option value="yearly">Anual (12 meses)</option>
+              </select>
+            </div>
+
+            {/* Fecha de Inicio */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Fecha de Inicio de Suscripción
+              </label>
+              <input
+                type="date"
+                value={subscriptionStartedAt}
+                onChange={(e) => setSubscriptionStartedAt(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              >
+              </input>
+            </div>
+
+            {/* Fecha de Vencimiento */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Fecha de Vencimiento (Opcional)
+              </label>
+              <input
+                type="date"
+                value={subscriptionExpiresAt}
+                onChange={(e) => setSubscriptionExpiresAt(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Dejar vacío para suscripción continua sin fecha límite.
+              </span>
+            </div>
+
+            {/* Período de Gracia */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Período de Gracia Hasta (Opcional)
+              </label>
+              <input
+                type="date"
+                value={gracePeriodUntil}
+                onChange={(e) => setGracePeriodUntil(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            {/* Proveedor de Pago */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Proveedor de Pago
+              </label>
+              <input
+                type="text"
+                value={paymentProvider}
+                onChange={(e) => setPaymentProvider(e.target.value)}
+                placeholder="manual, transferencia, efectivo, etc."
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            {/* ID de Cliente en Pasarela */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                ID de Cliente de Pago (Opcional)
+              </label>
+              <input
+                type="text"
+                value={paymentCustomerId}
+                onChange={(e) => setPaymentCustomerId(e.target.value)}
+                placeholder="cus_xxxxxx"
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            {/* ID de Suscripción en Pasarela */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                ID de Suscripción (Opcional)
+              </label>
+              <input
+                type="text"
+                value={paymentSubscriptionId}
+                onChange={(e) => setPaymentSubscriptionId(e.target.value)}
+                placeholder="sub_xxxxxx"
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            {/* Motivo de cambio para Auditoría */}
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Motivo del Cambio de Plan / Suscripción (Registrado en auditoría)
+              </label>
+              <input
+                type="text"
+                value={subChangeReason}
+                onChange={(e) => setSubChangeReason(e.target.value)}
+                placeholder="Ej. Upgrade acordado por WhatsApp, extensión de prueba de 15 días, etc."
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* SECCIÓN 9: CONFIGURACIÓN DE VISIBILIDAD DE BOTONES (Regla 9) */}
         {/* ----------------------------------------------------------------- */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-              8. Configuración del Perfil (Switches de Visibilidad)
+              9. Configuración del Perfil (Switches de Visibilidad)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Elige qué elementos y botones estarán activos en el perfil público
@@ -1975,6 +2263,129 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* SECCIÓN 10: CONTRATO DEL CLIENTE Y CUMPLIMIENTO LEGAL (PARTE 10) */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  10. Contrato del Cliente y Expediente Legal
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Seguimiento de formalización comercial, vigencia y archivo privado
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Estado del Contrato:</span>
+              <select
+                value={contractStatus}
+                onChange={(e) => setContractStatus(e.target.value as ClientContractStatus)}
+                className="py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-black bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:border-blue-500"
+              >
+                <option value="draft">Borrador (draft)</option>
+                <option value="pending">Pendiente de Aceptación (pending)</option>
+                <option value="accepted">Aceptado en Plataforma (accepted)</option>
+                <option value="signed">Firmado Formalmente (signed)</option>
+                <option value="expired">Expirado (expired)</option>
+                <option value="cancelled">Cancelado (cancelled)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Advertencia Legal */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+            <Info className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div className="leading-relaxed">
+              <strong>Aviso legal técnico:</strong> La marcación o aceptación en la plataforma registra el consentimiento administrativo y versión de términos. La formalización definitiva de la prestación de servicios o contratos corporativos debe complementarse mediante los instrumentos jurídicos válidos en República Dominicana.
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Versión del Contrato / Términos
+              </label>
+              <input
+                type="text"
+                value={contractVersion}
+                onChange={(e) => setContractVersion(e.target.value)}
+                placeholder="Ej. 1.0"
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Fecha de Aceptación en Portal
+              </label>
+              <input
+                type="date"
+                value={contractAcceptedAt}
+                onChange={(e) => setContractAcceptedAt(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Fecha de Firma Formal
+              </label>
+              <input
+                type="date"
+                value={contractSignedAt}
+                onChange={(e) => setContractSignedAt(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Fecha de Vencimiento del Contrato
+              </label>
+              <input
+                type="date"
+                value={contractExpiresAt}
+                onChange={(e) => setContractExpiresAt(e.target.value)}
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Ubicación / URL Privada del Documento (Storage)
+              </label>
+              <input
+                type="text"
+                value={contractDocumentUrl}
+                onChange={(e) => setContractDocumentUrl(e.target.value)}
+                placeholder="contracts/{clientId}/contrato_firmado.pdf"
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-mono font-medium focus:outline-hidden focus:border-blue-500"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Los contratos se archivan de manera privada (no accesibles públicamente).
+              </span>
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                Notas y Observaciones Contractuales Internas
+              </label>
+              <textarea
+                rows={2}
+                value={contractNotes}
+                onChange={(e) => setContractNotes(e.target.value)}
+                placeholder="Anotaciones sobre cláusulas particulares, acuerdos de entrega, etc."
+                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
           </div>
         </div>
 

@@ -14,12 +14,10 @@ export const WHATSAPP_NUMBER = "18090000000";
 export const PUBLIC_BASE_URL = "https://taprd.com";
 
 /**
- * Credenciales de demostración para el panel de administración.
- * ATENCIÓN: Estas credenciales son SOLAMENTE para DEMO y deben eliminarse
- * cuando se implemente autenticación real con Firebase / Supabase o backend propio.
+ * Correo oficial de referencia para el panel de administración.
+ * NUNCA almacenar contraseñas en código fuente.
  */
 export const ADMIN_DEMO_EMAIL = "admin@taprd.com";
-export const ADMIN_DEMO_PASSWORD = "123456";
 
 /**
  * Genera el enlace dinámico de WhatsApp para un número y mensaje opcional.

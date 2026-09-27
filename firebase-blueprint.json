@@ -8,17 +8,23 @@
         "uid": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "superadmin", "client"] },
+        "role": { "type": "string", "enum": ["admin", "superadmin", "client", "ADMIN", "CLIENT"] },
         "clientId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
-        "lastLogin": { "type": "string", "format": "date-time" }
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "termsAccepted": { "type": "boolean" },
+        "privacyAccepted": { "type": "boolean" },
+        "termsAcceptedAt": { "type": "string" },
+        "privacyAcceptedAt": { "type": "string" },
+        "termsVersion": { "type": "string" },
+        "privacyVersion": { "type": "string" }
       },
       "required": ["uid", "email", "role"]
     },
     "clients": {
       "title": "Client",
-      "description": "Cliente comercial, perfil digital y tarjeta NFC de TapRD",
+      "description": "Cliente comercial, perfil digital, tarjeta NFC y contrato de TapRD",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -33,17 +39,130 @@
         "clientEmail": { "type": "string" },
         "userId": { "type": "string" },
         "accessStatus": { "type": "string", "enum": ["none", "pending", "active", "suspended"] },
+        "accountStatus": { "type": "string", "enum": ["active", "inactive", "suspended", "pending_deletion"] },
+        "profileStatus": { "type": "string", "enum": ["active", "inactive", "suspended"] },
+        "contractStatus": { "type": "string", "enum": ["draft", "pending", "accepted", "signed", "expired", "cancelled"] },
+        "contractVersion": { "type": "string" },
+        "contractAcceptedAt": { "type": "string" },
+        "contractSignedAt": { "type": "string" },
+        "contractExpiresAt": { "type": "string" },
+        "contractDocumentUrl": { "type": "string" },
+        "contractNotes": { "type": "string" },
+        "termsVersion": { "type": "string" },
+        "privacyVersion": { "type": "string" },
+        "termsAccepted": { "type": "boolean" },
+        "privacyAccepted": { "type": "boolean" },
+        "termsAcceptedAt": { "type": "string" },
+        "privacyAcceptedAt": { "type": "string" },
         "city": { "type": "string" },
         "address": { "type": "string" },
         "logo": { "type": "string" },
         "logoUrl": { "type": "string" },
         "status": { "type": "string", "enum": ["active", "pending", "inactive"] },
         "plan": { "type": "string", "enum": ["starter", "business", "pro"] },
-        "subscriptionStatus": { "type": "string", "enum": ["active", "pending", "expired", "cancelled"] },
+        "subscriptionStatus": { "type": "string", "enum": ["pending", "active", "past_due", "expired", "cancelled", "suspended", "trialing"] },
+        "subscriptionStartedAt": { "type": "string" },
+        "subscriptionExpiresAt": { "type": "string" },
+        "gracePeriodUntil": { "type": "string" },
+        "billingCycle": { "type": "string", "enum": ["monthly", "yearly"] },
+        "paymentProvider": { "type": "string" },
+        "paymentCustomerId": { "type": "string" },
+        "paymentSubscriptionId": { "type": "string" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "businessName", "slug", "status"]
+    },
+    "privacyRequests": {
+      "title": "PrivacyRequest",
+      "description": "Solicitudes ciudadanas y de clientes para el ejercicio de derechos ARCO y privacidad",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientBusinessName": { "type": "string" },
+        "userEmail": { "type": "string", "format": "email" },
+        "requestType": { 
+          "type": "string", 
+          "enum": ["data_correction", "data_update", "data_access", "data_deletion", "privacy_inquiry"] 
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["pending", "in_review", "completed", "rejected", "cancelled"] 
+        },
+        "details": { "type": "string" },
+        "notes": { "type": "string" },
+        "resolvedAt": { "type": "string" },
+        "resolvedBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "userEmail", "requestType", "status", "details", "createdAt"]
+    },
+    "reports": {
+      "title": "ContentReport",
+      "description": "Denuncias ciudadanas de contenido incorrecto, suplantación, malware, copyright o spam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "profileSlug": { "type": "string" },
+        "clientId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "reason": { 
+          "type": "string", 
+          "enum": ["incorrect_content", "impersonation", "illegal_content", "unauthorized_brand", "spam", "other"] 
+        },
+        "details": { "type": "string" },
+        "reporterEmail": { "type": "string" },
+        "status": { 
+          "type": "string", 
+          "enum": ["pending", "reviewing", "resolved", "dismissed"] 
+        },
+        "actionTaken": { "type": "string" },
+        "adminNotes": { "type": "string" },
+        "resolvedAt": { "type": "string" },
+        "resolvedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "profileSlug", "reason", "details", "status", "createdAt"]
+    },
+    "plans": {
+      "title": "Plan",
+      "description": "Planes de suscripción y límites de características de TapRD",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string", "enum": ["DOP", "USD"] },
+        "interval": { "type": "string", "enum": ["monthly", "yearly"] },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "limits": { "type": "object" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "price", "currency", "interval", "active"]
+    },
+    "subscriptionAuditLogs": {
+      "title": "SubscriptionAuditLog",
+      "description": "Registro de auditoría inmutable de cambios en planes y suscripciones",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientBusinessName": { "type": "string" },
+        "previousPlan": { "type": "string" },
+        "newPlan": { "type": "string" },
+        "previousStatus": { "type": "string" },
+        "newStatus": { "type": "string" },
+        "changedBy": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["clientId", "previousPlan", "newPlan", "previousStatus", "newStatus", "changedBy", "timestamp"]
     },
     "auditLogs": {
       "title": "AuditLog",
@@ -54,17 +173,11 @@
         "actorUid": { "type": "string" },
         "actorRole": { "type": "string" },
         "action": { 
-          "type": "string", 
-          "enum": [
-            "CLIENT_ACCESS_CREATED", 
-            "CLIENT_ACCESS_SUSPENDED", 
-            "CLIENT_ACCESS_REACTIVATED", 
-            "CLIENT_INVITATION_RESENT", 
-            "CLIENT_PROFILE_UPDATED"
-          ] 
+          "type": "string"
         },
         "targetClientId": { "type": "string" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "string" },
+        "details": { "type": "object" }
       },
       "required": ["actorUid", "actorRole", "action", "targetClientId", "timestamp"]
     }
@@ -76,11 +189,27 @@
     },
     "/clients/{clientId}": {
       "schema": "clients",
-      "description": "Perfiles y configuraciones comerciales de clientes TapRD"
+      "description": "Perfiles, configuraciones comerciales y contratos de clientes TapRD"
+    },
+    "/privacyRequests/{requestId}": {
+      "schema": "privacyRequests",
+      "description": "Solicitudes de derechos ARCO, corrección y supresión de datos personales"
+    },
+    "/reports/{reportId}": {
+      "schema": "reports",
+      "description": "Reportes y denuncias de contenido público para moderación administrativa"
     },
     "/auditLogs/{logId}": {
       "schema": "auditLogs",
       "description": "Historial de auditoría inmutable para acciones de seguridad y accesos"
+    },
+    "/plans/{planId}": {
+      "schema": "plans",
+      "description": "Catálogo de planes comerciales, precios y límites"
+    },
+    "/subscriptionAuditLogs/{logId}": {
+      "schema": "subscriptionAuditLogs",
+      "description": "Historial de auditoría para cambios manuales y automáticos de suscripción y planes"
     }
   }
 }

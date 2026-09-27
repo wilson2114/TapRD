@@ -20,7 +20,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, firebaseConfig } from '../lib/firebase';
-import { ADMIN_DEMO_EMAIL, ADMIN_DEMO_PASSWORD } from '../config/constants';
+import { ADMIN_DEMO_EMAIL } from '../config/constants';
 import { translateFirebaseError } from '../utils/firebaseErrors';
 import { AppUser, UserRole } from '../types/user';
 import { Client, DEFAULT_CLIENT_PERMISSIONS } from '../types/client';
@@ -220,49 +220,7 @@ export async function loginAdmin(
     };
   }
 
-  // 1. Acceso de demostración rápido
-  if (cleanEmail === ADMIN_DEMO_EMAIL.toLowerCase() && cleanPass === ADMIN_DEMO_PASSWORD) {
-    let firebaseUid: string | undefined = undefined;
-
-    if (isFirebaseConfigured) {
-      try {
-        const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
-        firebaseUid = cred.user.uid;
-      } catch {
-        try {
-          const createCred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
-          firebaseUid = createCred.user.uid;
-          await updateProfile(createCred.user, { displayName: 'Administrador TapRD' });
-
-          const userRef = doc(db, 'users', createCred.user.uid);
-          await setDoc(userRef, {
-            uid: createCred.user.uid,
-            email: cleanEmail,
-            displayName: 'Administrador TapRD',
-            role: 'superadmin',
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
-
-    const demoUser: AppUser = {
-      uid: firebaseUid || auth.currentUser?.uid || 'demo-admin-uid',
-      email: ADMIN_DEMO_EMAIL,
-      displayName: 'Administrador TapRD',
-      role: 'superadmin',
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
-    };
-
-    cachedCurrentUser = demoUser;
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(demoUser));
-    notifySubscribers(demoUser);
-    return { success: true, user: demoUser };
-  }
-
-  // 2. Autenticación real con Firebase Authentication
+  // Autenticación real con Firebase Authentication
   if (!isFirebaseConfigured) {
     return {
       success: false,
@@ -891,31 +849,6 @@ export async function loginUser(email: string, pass: string): Promise<LoginUserR
 
   if (!cleanEmail || !cleanPass) {
     return { success: false, error: 'Por favor ingresa tu correo electrónico y contraseña.' };
-  }
-
-  // Demo fallback
-  if (cleanEmail === ADMIN_DEMO_EMAIL.toLowerCase() && cleanPass === ADMIN_DEMO_PASSWORD) {
-    const adminUser: AppUser = {
-      uid: 'demo-admin-uid',
-      email: cleanEmail,
-      displayName: 'Wilson Abelino Brito (Admin)',
-      role: 'ADMIN',
-      active: true,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString()
-    };
-    cachedCurrentUser = adminUser;
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(adminUser));
-    notifySubscribers(adminUser);
-    return { success: true, role: 'ADMIN', user: adminUser };
-  }
-
-  if (cleanEmail === 'cliente@taprd.com' || cleanEmail === 'demo@barberia.com') {
-    const res = await loginClient(cleanEmail, cleanPass);
-    if (res.success && res.user) {
-      return { success: true, role: 'CLIENT', user: res.user, client: res.client };
-    }
-    return { success: false, error: res.error };
   }
 
   if (!isFirebaseConfigured) {

@@ -1,9 +1,9 @@
 /**
- * ADAPTADOR DE COMPATIBILIDAD
+ * ADAPTADOR DE COMPATIBILIDAD Y SEGURIDAD ADMINISTRATIVA
  * Re-exporta los métodos centralizados desde authService.ts
  */
 export * from './authService';
-import { getCurrentUser, registerAdmin } from './authService';
+import { getCurrentUser, isAuthorizedAdminEmail, AUTHORIZED_ADMIN_EMAILS } from './authService';
 
 export const getCurrentAdminUser = getCurrentUser;
 
@@ -13,43 +13,38 @@ interface AdminListItem {
   role: string;
 }
 
-const DEFAULT_ADMINS: AdminListItem[] = [
+const AUTHORIZED_ADMINS: AdminListItem[] = [
   { name: 'Wilson Abelino Brito', email: 'wilsonabelinobrito@gmail.com', role: 'superadmin' },
   { name: 'Administrador Principal TapRD', email: 'admin@taprd.com', role: 'superadmin' }
 ];
 
 export function getRegisteredAdmins(): AdminListItem[] {
-  try {
-    const raw = localStorage.getItem('taprd_registered_admins_v2');
-    if (raw) {
-      return JSON.parse(raw);
-    }
-  } catch {}
-  return DEFAULT_ADMINS;
+  // Los administradores autorizados provienen exclusivamente de identidades verificadas
+  return AUTHORIZED_ADMINS;
 }
 
-export function createAdminUser(
+export async function createAdminUser(
   name: string,
   email: string,
   pass: string,
-  role: 'admin' | 'superadmin' = 'admin'
-): { success: boolean; error?: string } {
-  if (!name || !email || !pass) {
+  _role: 'admin' | 'superadmin' = 'admin'
+): Promise<{ success: boolean; error?: string }> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  
+  if (!name || !cleanEmail || !pass) {
     return { success: false, error: 'Todos los campos son obligatorios.' };
   }
 
-  const current = getRegisteredAdmins();
-  if (current.some(a => a.email.toLowerCase() === email.toLowerCase())) {
-    return { success: false, error: 'Ya existe un administrador registrado con ese correo.' };
+  // Prevenir escalamiento de privilegios por parte de clientes o terceros no autorizados
+  if (!isAuthorizedAdminEmail(cleanEmail)) {
+    return { 
+      success: false, 
+      error: 'Operación no permitida. Solo las cuentas corporativas autorizadas por la dirección de TapRD pueden ser registradas como administradores.' 
+    };
   }
 
-  const updated: AdminListItem[] = [...current, { name, email, role }];
-  try {
-    localStorage.setItem('taprd_registered_admins_v2', JSON.stringify(updated));
-  } catch {}
-
-  // Intenta registrar en Firebase en segundo plano si está disponible
-  registerAdmin(name, email, pass).catch(() => {});
-
-  return { success: true };
+  return { 
+    success: false, 
+    error: 'La creación de administradores debe realizarse mediante Firebase Console o el backend de Cloud Functions con Custom Claims.' 
+  };
 }
