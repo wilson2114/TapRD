@@ -206,6 +206,15 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // COLECCIÓN: securityLogs/{logId}
+    // =========================================================================
+    match /securityLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() || isClient();
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
     // COLECCIÓN: system_settings/{settingId}
     // =========================================================================
     match /system_settings/{settingId} {

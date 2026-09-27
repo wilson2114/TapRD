@@ -1608,18 +1608,30 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                 key={srv.id}
                 className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 flex items-center justify-between gap-4"
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] font-black flex items-center justify-center">
-                      {idx + 1}
-                    </span>
-                    <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                      {srv.name}
-                    </h3>
+                <div className="flex items-center gap-3">
+                  {srv.imageUrl && (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                      <img src={srv.thumbnailUrl || srv.imageUrl} alt={srv.name} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] font-black flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                        {srv.name}
+                      </h3>
+                      {srv.imageUrl && (
+                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">
+                          Foto WebP
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-7">
+                      {srv.description}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-7">
-                    {srv.description}
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">

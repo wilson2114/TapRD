@@ -180,6 +180,24 @@
         "details": { "type": "object" }
       },
       "required": ["actorUid", "actorRole", "action", "targetClientId", "timestamp"]
+    },
+    "securityLogs": {
+      "title": "SecurityLog",
+      "description": "Registro de eventos de seguridad, auditoría de imágenes y prevención de malware",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "action": { "type": "string" },
+        "reason": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSizeBytes": { "type": "number" },
+        "mimeDeclared": { "type": "string" },
+        "detectedFormat": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["clientId", "action", "timestamp"]
     }
   },
   "firestore": {
@@ -210,6 +228,10 @@
     "/subscriptionAuditLogs/{logId}": {
       "schema": "subscriptionAuditLogs",
       "description": "Historial de auditoría para cambios manuales y automáticos de suscripción y planes"
+    },
+    "/securityLogs/{logId}": {
+      "schema": "securityLogs",
+      "description": "Historial de auditoría de incidentes de seguridad y subida de archivos"
     }
   }
 }

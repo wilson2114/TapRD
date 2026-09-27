@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import {
   createClientAccessHandler,
@@ -10,7 +11,7 @@ import {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // Middleware de parsing JSON con límite de tamaño para evitar ataques DoS
   app.use(express.json({ limit: '1mb' }));
@@ -70,14 +71,20 @@ async function startServer() {
   });
 
   // Vite middleware para desarrollo o archivos estáticos en producción
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || !process.argv[1]?.endsWith('server.ts');
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // Buscar carpeta dist de forma resiliente tanto en CWD como relativo a __dirname
+    const distPath = fs.existsSync(path.join(__dirname, 'index.html'))
+      ? __dirname
+      : path.join(process.cwd(), 'dist');
+
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

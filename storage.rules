@@ -1,0 +1,83 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // =========================================================================
+    // HELPER FUNCTIONS DE SEGURIDAD
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        ('email' in request.auth.token && (
+          request.auth.token.email.lower() == 'wilsonabelinobrito@gmail.com' ||
+          request.auth.token.email.lower().matches('.*@taprd[.]com$')
+        )) ||
+        ('role' in request.auth.token && (
+          request.auth.token.role == 'ADMIN' || 
+          request.auth.token.role == 'admin' || 
+          request.auth.token.role == 'superadmin'
+        ))
+      );
+    }
+
+    function isClientOwner(clientId) {
+      return isAuthenticated() && (
+        request.auth.uid == clientId ||
+        ('clientId' in request.auth.token && request.auth.token.clientId == clientId) ||
+        isAdmin()
+      );
+    }
+
+    function isValidImagePayload() {
+      return request.resource != null &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.size >= 100 &&
+        request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+
+    // =========================================================================
+    // 1. REGLA POR DEFECTO: DENEGACIÓN TOTAL (CERO TRUST)
+    // =========================================================================
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // 2. LOGOS DE CLIENTES COMERCIALES
+    // =========================================================================
+    match /clients/{clientId}/{allPaths=**} {
+      // Lectura pública para perfiles digitales y tarjetas NFC
+      allow read: if true;
+      // Escritura restringida al dueño del negocio o administrador
+      allow create, update: if isClientOwner(clientId) && isValidImagePayload();
+      allow delete: if isClientOwner(clientId);
+    }
+
+    // =========================================================================
+    // 3. ARCHIVOS EN CUARENTENA / TEMPORALES (ISOLATION STRICT)
+    // =========================================================================
+    match /uploads/quarantine/{clientId}/{fileId} {
+      // PROHIBIDA LA LECTURA PÚBLICA: Los archivos de cuarentena nunca son públicos
+      allow read: if isClientOwner(clientId);
+      // Solo el propietario autenticado puede subir a su propia carpeta de cuarentena
+      allow create, update: if isClientOwner(clientId) && isValidImagePayload();
+      allow delete: if isClientOwner(clientId);
+    }
+
+    // =========================================================================
+    // 4. FOTOGRAFÍAS Y MINIATURAS DE SERVICIOS APROBADAS
+    // =========================================================================
+    match /services/{clientId}/{serviceId}/{imageId} {
+      // Lectura pública de imágenes aprobadas para catálogo /p/:slug
+      allow read: if true;
+      // Escritura y reemplazo solo para el cliente propietario
+      allow create, update: if isClientOwner(clientId) && isValidImagePayload();
+      // Eliminación solo por el cliente propietario o administrador
+      allow delete: if isClientOwner(clientId);
+    }
+  }
+}

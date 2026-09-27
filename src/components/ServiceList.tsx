@@ -33,7 +33,22 @@ export function ServiceList({ services, onSelectService, currency = 'RD$' }: Ser
             key={service.id}
             className="py-3.5 first:pt-0 last:pb-0 flex items-start justify-between gap-4 group"
           >
-            <div className="flex-1">
+            {/* Fotografía de servicio si existe */}
+            {service.imageUrl && (
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/80 shrink-0">
+                <img
+                  src={service.thumbnailUrl || service.imageUrl}
+                  alt={service.imageAlt || service.name}
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                   {service.name}

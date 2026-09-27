@@ -1,0 +1,15 @@
+# Firebase App Hosting Configuration for TapRD
+# Documentation: https://firebase.google.com/docs/app-hosting/configure
+
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: NODE_ENV
+    value: production
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: taprd-16064

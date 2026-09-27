@@ -365,41 +365,72 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                   Servicios Disponibles
                 </h2>
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                  {client.services.length} opciones
+                  {client.services.filter(s => s.active !== false).length} opciones
                 </span>
               </div>
 
-              <div className="space-y-2.5">
-                {client.services.map((srv) => (
-                  <div
-                    key={srv.id}
-                    className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex items-start justify-between gap-3"
-                  >
-                    <div className="space-y-0.5">
-                      <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                        {srv.name}
-                      </h3>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-                        {srv.description}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-xs font-black text-blue-600 dark:text-blue-400 font-mono bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-700 shadow-2xs block">
-                        {srv.price}
-                      </span>
-                      {client.whatsapp && (
-                        <a
-                          href={getWhatsAppUrl(client.whatsapp, `Hola, me interesa el servicio: ${srv.name}`)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline mt-1 inline-block"
-                        >
-                          Pedir
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {client.services
+                  .filter(srv => srv.active !== false)
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((srv) => {
+                    const hasValidPhoto = Boolean(
+                      srv.imageUrl && 
+                      !srv.imageUrl.includes('quarantine') &&
+                      srv.imageStatus !== 'rejected' &&
+                      srv.imageStatus !== 'failed'
+                    );
+                    const photoSrc = srv.thumbnailUrl || srv.imageUrl;
+                    const altText = srv.imageAlt || `${srv.name} - ${client.businessName}`;
+
+                    return (
+                      <div
+                        key={srv.id}
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3 transition-colors hover:border-blue-200 dark:hover:border-blue-900/60"
+                      >
+                        {/* Fotografía de servicio (si está disponible y aprobada) */}
+                        {hasValidPhoto && (
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/80 shrink-0 relative group">
+                            <img
+                              src={photoSrc}
+                              alt={altText}
+                              loading="lazy"
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              onError={(e) => {
+                                (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white leading-tight">
+                            {srv.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium line-clamp-2">
+                            {srv.description}
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-black text-blue-600 dark:text-blue-400 font-mono bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-700 shadow-2xs block">
+                            {srv.currency && srv.currency !== 'DOP' && !srv.price.includes(srv.currency) ? `${srv.currency} ` : ''}
+                            {srv.price}
+                          </span>
+                          {client.whatsapp && (
+                            <a
+                              href={getWhatsAppUrl(client.whatsapp, `Hola, me interesa el servicio: ${srv.name}`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline mt-1 inline-block"
+                            >
+                              Pedir
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}

@@ -598,7 +598,25 @@ export function getPublicClientData(client: Client) {
     avatarBgColor: client.avatarBgColor,
     coverGradient: client.coverGradient,
     socialLinks: client.socialLinks,
-    services: client.services,
+    services: client.services
+      ? client.services
+          .filter(s => s.active !== false)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map(s => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            price: s.price,
+            currency: s.currency || 'DOP',
+            imageUrl: s.imageUrl && !s.imageUrl.includes('quarantine') && s.imageStatus !== 'rejected' && s.imageStatus !== 'failed' ? s.imageUrl : undefined,
+            thumbnailUrl: s.thumbnailUrl && !s.thumbnailUrl.includes('quarantine') ? s.thumbnailUrl : undefined,
+            imagePath: undefined, // No exponer rutas de Storage internas en perfil público
+            imageAlt: s.imageAlt || `${s.name} - ${client.businessName}`,
+            active: s.active !== false,
+            order: s.order ?? 1,
+            imageStatus: s.imageStatus === 'approved' ? 'approved' : undefined
+          }))
+      : [],
     hours: client.hours,
     weeklySchedule: client.weeklySchedule,
     settings: client.settings,

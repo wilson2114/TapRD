@@ -73,6 +73,13 @@ export interface ServiceItem {
   duration?: string;
   popular?: boolean;
   category?: string;
+  imageUrl?: string;
+  imagePath?: string;
+  imageAlt?: string;
+  active?: boolean;
+  order?: number;
+  imageStatus?: 'pending' | 'processing' | 'approved' | 'rejected' | 'failed';
+  thumbnailUrl?: string;
 }
 
 export interface BusinessHoursDay {

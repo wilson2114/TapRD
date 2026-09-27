@@ -31,11 +31,21 @@ export const DEFAULT_CLIENT_PERMISSIONS: ClientPermissions = {
   canDownloadQR: true,
 };
 
+export type ServiceImageStatus = 'pending' | 'processing' | 'approved' | 'rejected' | 'failed';
+
 export interface ClientService {
   id: string;
   name: string;
   description: string;
   price: string;
+  currency?: string;
+  imageUrl?: string;
+  imagePath?: string;
+  imageAlt?: string;
+  active?: boolean;
+  order?: number;
+  imageStatus?: ServiceImageStatus;
+  thumbnailUrl?: string;
 }
 
 export interface ClientSocialLinks {
