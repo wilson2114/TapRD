@@ -140,6 +140,27 @@ service cloud.firestore {
 
       // Eliminación: solo ADMIN
       allow delete: if isAdmin();
+
+      // =====================================================================
+      // SUBCOLECCIÓN: clients/{clientId}/analytics_events/{eventId}
+      // =====================================================================
+      match /analytics_events/{eventId} {
+        allow read: if isAdmin() ||
+          isClientOwner(clientId) ||
+          (isAuthenticated() && get(/databases/$(database)/documents/clients/$(clientId)).data.userId == request.auth.uid);
+
+        allow create: if request.resource.data.keys().hasAll(['type', 'device', 'createdAt']) &&
+          request.resource.data.keys().hasOnly(['type', 'device', 'createdAt', 'source']) &&
+          request.resource.data.type in [
+            'profileView', 'nfcScan', 'qrScan', 'whatsappClick',
+            'phoneClick', 'vcardDownload', 'instagramClick',
+            'facebookClick', 'tiktokClick', 'websiteClick',
+            'reviewClick', 'directionsClick'
+          ] &&
+          request.resource.data.device in ['ios', 'android', 'desktop'];
+
+        allow update, delete: if false;
+      }
     }
 
     // =========================================================================

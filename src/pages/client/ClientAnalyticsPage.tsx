@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
-import { canUseFeature, getFeatureLockReason } from '../../services/featureAccessService';
+import { canUseFeature } from '../../services/featureAccessService';
 import { getLimit } from '../../services/limitService';
+import { fetchClientAnalytics, ClientAnalyticsSummary } from '../../services/profileService';
 import { getProfileLocalStats } from '../../utils/analytics';
 import { 
   TrendingUp, 
@@ -27,23 +28,46 @@ interface ClientAnalyticsPageProps {
 
 export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
   const { client } = useClientAuth();
+  const [remoteStats, setRemoteStats] = useState<ClientAnalyticsSummary | null>(null);
+
+  const maxDays = client ? (getLimit(client, 'maxAnalyticsDays') ?? 30) : 30;
+
+  useEffect(() => {
+    if (!client?.id) return;
+    let active = true;
+    fetchClientAnalytics(client.id, maxDays)
+      .then((summary) => {
+        if (active) setRemoteStats(summary);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [client?.id, maxDays]);
 
   if (!client) return null;
 
   const hasAdvanced = canUseFeature(client, 'advancedAnalytics');
-  const maxDays = getLimit(client, 'maxAnalyticsDays') ?? 30;
 
   const localStats = getProfileLocalStats(client.slug);
-  const totalViews = (client.viewsCount ?? 0) + localStats.totalTaps;
-  const whatsappClicks = localStats.whatsappClicks;
-  const instagramClicks = localStats.instagramClicks;
-  const vcardDownloads = localStats.vcardDownloads;
-  const callClicks = 0;
+  const totalViews = Math.max(
+    client.viewsCount ?? 0,
+    remoteStats?.totalViews ?? 0,
+    localStats.totalTaps
+  );
+  const whatsappClicks = remoteStats ? remoteStats.whatsappClicks : localStats.whatsappClicks;
+  const instagramClicks = remoteStats ? remoteStats.instagramClicks : localStats.instagramClicks;
+  const vcardDownloads = remoteStats ? remoteStats.vcardDownloads : localStats.vcardDownloads;
+  const callClicks = remoteStats ? remoteStats.phoneClicks : 0;
   const totalActionClicks = whatsappClicks + instagramClicks + callClicks;
   const whatsappRate = totalViews > 0 ? ((whatsappClicks / totalViews) * 100).toFixed(1) : '0.0';
   const whatsappPct = totalActionClicks > 0 ? Math.round((whatsappClicks / totalActionClicks) * 100) : 0;
   const instagramPct = totalActionClicks > 0 ? Math.round((instagramClicks / totalActionClicks) * 100) : 0;
   const callPct = totalActionClicks > 0 ? Math.round((callClicks / totalActionClicks) * 100) : 0;
+
+  const totalMobileDevices = (remoteStats?.iosCount ?? 0) + (remoteStats?.androidCount ?? 0);
+  const iosPct = totalMobileDevices > 0 ? Math.round(((remoteStats?.iosCount ?? 0) / totalMobileDevices) * 100) : 0;
+  const androidPct = totalMobileDevices > 0 ? Math.round(((remoteStats?.androidCount ?? 0) / totalMobileDevices) * 100) : 0;
 
   return (
     <ClientLayout
@@ -226,11 +250,11 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                       <span className="font-bold">Apple iPhone (iOS NFC)</span>
-                      <span className="font-black text-slate-900 dark:text-white">0%</span>
+                      <span className="font-black text-slate-900 dark:text-white">{iosPct}%</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                       <span className="font-bold">Android (Samsung, Xiaomi, etc.)</span>
-                      <span className="font-black text-slate-900 dark:text-white">0%</span>
+                      <span className="font-black text-slate-900 dark:text-white">{androidPct}%</span>
                     </div>
                   </div>
                 </div>

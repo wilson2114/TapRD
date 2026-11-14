@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getClientBySlug, fetchClientBySlug, getPublicClientData, incrementClientViews } from '../services/clientService';
+import { trackAnalyticsEvent } from '../services/profileService';
 import { ClientProfile } from '../components/ClientProfile';
 import { DigitalProfile } from '../components/DigitalProfile';
 import { DEMO_PROFILES } from '../data/mockData';
@@ -31,6 +32,7 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
           setIsLoading(false);
           if (fetched && fetched.status === 'active' && fetched.profileStatus !== 'inactive' && fetched.active !== false) {
             incrementClientViews(fetched.id);
+            trackAnalyticsEvent(fetched.id, 'profileView', fetched.slug);
           }
         }
       })

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
 import { getWhatsAppUrl } from '../config/constants';
 import { downloadClientVCard } from '../utils/vcard';
+import { trackAnalyticsEvent, AnalyticsEventType } from '../services/profileService';
 import { SEOHead } from './SEOHead';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemeToggle } from './ThemeToggle';
@@ -57,6 +58,11 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const trackEvent = (type: AnalyticsEventType) => {
+    if (isPreview) return;
+    trackAnalyticsEvent(client.id, type, client.slug);
+  };
+
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -81,6 +87,7 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
   };
 
   const handleSaveContact = () => {
+    trackEvent('vcardDownload');
     downloadClientVCard(client);
     showToast(`¡Contacto de ${client.businessName} descargado!`);
   };
@@ -422,6 +429,7 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                               href={getWhatsAppUrl(client.whatsapp, `Hola, me interesa el servicio: ${srv.name}`)}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => trackEvent('whatsappClick')}
                               className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline mt-1 inline-block"
                             >
                               Pedir
@@ -492,6 +500,7 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                   href={client.mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackEvent('directionsClick')}
                   className="w-full py-3 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-extrabold text-xs text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-colors border border-slate-200/80 dark:border-slate-700"
                 >
                   <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
