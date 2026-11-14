@@ -5,7 +5,9 @@ export type AuditActionType =
   | 'CLIENT_ACCESS_SUSPENDED'
   | 'CLIENT_ACCESS_REACTIVATED'
   | 'CLIENT_INVITATION_RESENT'
-  | 'CLIENT_PROFILE_UPDATED';
+  | 'CLIENT_PROFILE_UPDATED'
+  | 'CLIENT_PROFILE_PAUSED'
+  | 'CLIENT_PROFILE_ACTIVATED';
 
 export interface AuditLogPayload {
   actorUid: string;

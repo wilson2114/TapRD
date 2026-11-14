@@ -3,7 +3,7 @@ import { AdminLayout } from '../../components/admin/AdminLayout';
 import { getClientById, createClient, updateClient, generateSlug } from '../../services/clientService';
 import { uploadClientLogo, deleteClientLogo, validateLogoFile } from '../../services/storageService';
 import { PUBLIC_BASE_URL, getWhatsAppUrl } from '../../config/constants';
-import { Client, ClientService, ClientStatus, ClientSettings, ClientSocialLinks, ClientDayHours } from '../../types';
+import { Client, ClientService, ClientStatus, ClientSettings, ClientSocialLinks, ClientDayHours, ClientProfileStatus } from '../../types';
 import { ProfileQRCode } from '../../components/admin/ProfileQRCode';
 import { ClientProfile } from '../../components/ClientProfile';
 import { 
@@ -26,6 +26,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  ShieldAlert,
   KeyRound,
   ShieldCheck,
   UserCheck,
@@ -42,7 +43,8 @@ import {
   createClientAccess,
   resendClientInvitation,
   suspendClientAccess,
-  reactivateClientAccess
+  reactivateClientAccess,
+  verifyClientAccessStatus
 } from '../../services/clientAccessService';
 import { ClientAccessStatus, ClientBankAccount, ClientSubscriptionStatus, ClientContractStatus } from '../../types/client';
 import { COMPANY_CONFIG } from '../../config/company';
@@ -51,6 +53,8 @@ import { getPlans } from '../../services/planService';
 import { logSubscriptionChange } from '../../services/subscriptionService';
 import { DEFAULT_PLANS } from '../../config/plans';
 import { Plan } from '../../types/plan';
+import { CITIES } from '../../data/dominicanCities';
+import { CitySelector } from '../../components/CitySelector';
 
 interface AdminClientFormPageProps {
   clientId?: string; // Si está presente, es modo edición
@@ -79,20 +83,6 @@ const CATEGORIES = [
   'Servicios Profesionales',
   'Comercio / Tienda',
   'Otro'
-];
-
-const CITIES = [
-  'Santo Domingo',
-  'Santiago de los Caballeros',
-  'La Romana',
-  'Punta Cana / Bávaro',
-  'Puerto Plata',
-  'San Cristóbal',
-  'San Pedro de Macorís',
-  'Higüey',
-  'La Vega',
-  'Bonao',
-  'Las Terrenas / Samaná'
 ];
 
 export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPageProps) {
@@ -194,6 +184,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
   const [isCreatingAccess, setIsCreatingAccess] = useState(false);
   const [isResendingInvitation, setIsResendingInvitation] = useState(false);
   const [isTogglingAccess, setIsTogglingAccess] = useState(false);
+  const [isVerifyingAccess, setIsVerifyingAccess] = useState(false);
   const [accessFeedback, setAccessFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [activationLink, setActivationLink] = useState<string | null>(null);
   const [copiedActivationLink, setCopiedActivationLink] = useState(false);
@@ -221,6 +212,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
   const [contractExpiresAt, setContractExpiresAt] = useState<string>('');
   const [contractDocumentUrl, setContractDocumentUrl] = useState<string>('');
   const [contractNotes, setContractNotes] = useState<string>('');
+  const [showSuspendModal, setShowSuspendModal] = useState<boolean>(false);
 
   // Cargar catálogo de planes disponibles
   useEffect(() => {
@@ -306,13 +298,48 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
           }
 
           // Cargar datos de acceso del cliente (Parte 7.1)
-          setAccessStatus(found.accessStatus || (found.userId ? 'active' : 'none'));
+          const initialAccess = found.accessStatus || (found.userId ? 'active' : 'none');
+          setAccessStatus(initialAccess);
           setUserId(found.userId);
-          setClientAccessEmail(found.clientEmail || found.email || '');
+          const emailForAccess = found.clientEmail || found.email || '';
+          setClientAccessEmail(emailForAccess);
+
+          // Verificar automáticamente el estado real con Firebase Authentication / Firestore
+          verifyClientAccessStatus(found.id, found.userId, emailForAccess)
+            .then((verified) => {
+              if (verified && verified !== 'none' && verified !== initialAccess) {
+                setAccessStatus(verified);
+              }
+            })
+            .catch(console.warn);
         }
       });
     }
   }, [clientId]);
+
+  // Comprobar manualmente el estado real del acceso
+  const handleCheckAccessStatus = async () => {
+    if (!clientId) return;
+    setIsVerifyingAccess(true);
+    setAccessFeedback(null);
+    try {
+      const verified = await verifyClientAccessStatus(clientId, userId, clientAccessEmail || email);
+      if (verified && verified !== 'none') {
+        setAccessStatus(verified);
+        setAccessFeedback({
+          type: 'success',
+          message: `Estado verificado: ${verified === 'active' ? 'Cuenta Activa' : verified === 'pending' ? 'Pendiente de activación' : 'Suspendido'}.`
+        });
+      }
+    } catch {
+      setAccessFeedback({
+        type: 'error',
+        message: 'No se pudo verificar el estado en este momento.'
+      });
+    } finally {
+      setIsVerifyingAccess(false);
+    }
+  };
 
   // Manejadores de Gestión Segura de Accesos (Parte 7.1)
   const handleCreateAccess = async () => {
@@ -332,7 +359,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
     try {
       const res = await createClientAccess(clientId, targetEmail, businessName);
       if (res.success) {
-        setAccessStatus('pending');
+        setAccessStatus(res.accessStatus || 'pending');
         setUserId(res.userId);
         if (res.activationLink) {
           setActivationLink(res.activationLink);
@@ -387,12 +414,14 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
     }
   };
 
-  const handleSuspendAccess = async () => {
+  const handleSuspendAccess = () => {
     if (!clientId) return;
-    if (!window.confirm('¿Deseas suspender el acceso de este cliente? No podrá ingresar al portal privado hasta ser reactivado.')) {
-      return;
-    }
+    setShowSuspendModal(true);
+  };
 
+  const executeSuspendAccess = async () => {
+    if (!clientId) return;
+    setShowSuspendModal(false);
     setIsTogglingAccess(true);
     setAccessFeedback(null);
 
@@ -402,7 +431,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
         setAccessStatus('suspended');
         setAccessFeedback({
           type: 'info',
-          message: 'Acceso suspendido.'
+          message: 'Acceso suspendido correctamente.'
         });
       } else {
         setAccessFeedback({
@@ -756,6 +785,8 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
       bankAccounts,
       settings,
       status,
+      active: status === 'active',
+      profileStatus: (status === 'inactive' ? 'inactive' : 'active') as ClientProfileStatus,
       productAssigned,
       // Campos de Plan y Suscripción (Parte 9)
       plan: clientPlan,
@@ -1033,17 +1064,13 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                Ciudad
+                Ciudad o Pueblo (República Dominicana)
               </label>
-              <select
+              <CitySelector
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 transition-colors"
-              >
-                {CITIES.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                onChange={setCity}
+                buttonClassName="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-medium focus:outline-hidden focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 transition-colors flex items-center justify-between gap-2 text-left cursor-pointer"
+              />
             </div>
 
             <div className="md:col-span-2">
@@ -1106,6 +1133,17 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                     <span className="w-2 h-2 rounded-full bg-rose-500" />
                     Suspendido
                   </span>
+                )}
+                {clientId && (
+                  <button
+                    type="button"
+                    onClick={handleCheckAccessStatus}
+                    disabled={isVerifyingAccess}
+                    className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
+                    title="Verificar estado real con Firebase Authentication"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isVerifyingAccess ? 'animate-spin text-blue-600' : ''}`} />
+                  </button>
                 )}
               </div>
             </div>
@@ -1222,6 +1260,26 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                   <>
                     <button
                       type="button"
+                      disabled={isTogglingAccess}
+                      onClick={handleReactivateAccess}
+                      className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer"
+                      title="Activar cuenta y marcar como Activo"
+                    >
+                      {isTogglingAccess ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Activando acceso...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Activar acceso</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
                       disabled={isResendingInvitation}
                       onClick={handleResendInvitation}
                       className="py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer"
@@ -1237,6 +1295,16 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                           <span>Reenviar invitación</span>
                         </>
                       )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendOfficialPasswordReset}
+                      className="py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      title="Enviar enlace oficial de restablecimiento de contraseña"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Restablecer contraseña</span>
                     </button>
 
                     <button
@@ -2459,6 +2527,44 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                 isPreview={true}
                 onNavigateHome={() => setPreviewOpen(false)}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación de Suspensión */}
+      {showSuspendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-black text-slate-900 dark:text-white text-base">
+                  ¿Suspender acceso al portal?
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  ¿Deseas suspender el acceso de este cliente? No podrá ingresar al portal privado hasta ser reactivado. Sus datos y perfil permanecerán guardados.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowSuspendModal(false)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeSuspendAccess}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-sm transition-colors cursor-pointer"
+              >
+                Suspender acceso
+              </button>
             </div>
           </div>
         </div>

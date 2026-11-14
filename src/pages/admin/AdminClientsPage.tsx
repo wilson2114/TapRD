@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { getClients, toggleClientStatus, deleteClient, subscribeToClients, fetchClients } from '../../services/clientService';
 import { createActivationToken } from '../../services/activationService';
+import { batchVerifyClientAccessStatuses, reactivateClientAccess } from '../../services/clientAccessService';
 import { PUBLIC_BASE_URL, getWhatsAppUrl } from '../../config/constants';
 import { Client, ClientStatus } from '../../types';
+import { getProvinceByCity, normalizeLocationText } from '../../data/dominicanCities';
 import { 
   Plus, 
   Search, 
@@ -29,7 +31,9 @@ import {
   Send,
   Mail,
   X,
-  Share2
+  Share2,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import { ClientAccessStatus } from '../../types/client';
 import { auth, isFirebaseConfigured } from '../../lib/firebase';
@@ -51,6 +55,17 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
   const [invitationModalData, setInvitationModalData] = useState<{ client: Client; activationUrl: string } | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
+  const [isTogglingStatusId, setIsTogglingStatusId] = useState<string | null>(null);
+  const [isDeletingClientId, setIsDeletingClientId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmText: string;
+    cancelText?: string;
+    variant: 'danger' | 'warning' | 'primary' | 'success';
+    onConfirm: () => void;
+  } | null>(null);
 
   // Suscribirse a actualizaciones en tiempo real desde Firestore
   useEffect(() => {
@@ -60,6 +75,36 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
     return () => unsubscribe();
   }, []);
 
+  // Verificar automáticamente en segundo plano el estado real de los clientes con acceso
+  useEffect(() => {
+    if (clients.length > 0) {
+      const pendingClients = clients.filter(
+        c => c.accessStatus === 'pending' || (!c.accessStatus && c.userId)
+      );
+      if (pendingClients.length > 0) {
+        batchVerifyClientAccessStatuses(
+          pendingClients.map(c => ({
+            id: c.id,
+            userId: c.userId,
+            email: c.email,
+            clientEmail: c.clientEmail,
+            accessStatus: c.accessStatus
+          }))
+        ).then(statuses => {
+          if (statuses && Object.keys(statuses).length > 0) {
+            setClients(prev => prev.map(cl => {
+              const newStat = statuses[cl.id];
+              if (newStat && newStat !== cl.accessStatus) {
+                return { ...cl, accessStatus: newStat };
+              }
+              return cl;
+            }));
+          }
+        }).catch(console.warn);
+      }
+    }
+  }, [clients.length]);
+
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => {
@@ -67,11 +112,47 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
     }, 3000);
   };
 
+  const handleQuickActivateAccess = async (client: Client) => {
+    try {
+      const res = await reactivateClientAccess(client.id);
+      if (res.success) {
+        setClients(prev => prev.map(c => c.id === client.id ? { ...c, accessStatus: 'active' } : c));
+        showToast(`Acceso de "${client.businessName}" activado correctamente como Activo`);
+      } else {
+        showToast(res.message || 'No se pudo activar el acceso', 'error');
+      }
+    } catch {
+      showToast('Error al activar el acceso del cliente', 'error');
+    }
+  };
+
   const refreshClients = async () => {
     setIsRefreshing(true);
     try {
       const updated = await fetchClients();
-      setClients(updated);
+      const pendingClients = updated.filter(
+        c => c.accessStatus === 'pending' || (!c.accessStatus && c.userId)
+      );
+      if (pendingClients.length > 0) {
+        const statuses = await batchVerifyClientAccessStatuses(
+          pendingClients.map(c => ({
+            id: c.id,
+            userId: c.userId,
+            email: c.email,
+            clientEmail: c.clientEmail,
+            accessStatus: c.accessStatus
+          }))
+        );
+        const merged = updated.map(cl => {
+          if (statuses && statuses[cl.id] && statuses[cl.id] !== cl.accessStatus) {
+            return { ...cl, accessStatus: statuses[cl.id] };
+          }
+          return cl;
+        });
+        setClients(merged);
+      } else {
+        setClients(updated);
+      }
       showToast('Clientes sincronizados con Firestore', 'info');
     } catch {
       showToast('Error al sincronizar con Firestore', 'error');
@@ -90,29 +171,86 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
     } catch {}
   };
 
-  const handleToggleStatus = async (client: Client) => {
-    if (client.status === 'active') {
-      const confirmed = window.confirm(`¿Quieres desactivar este perfil? Los datos permanecerán guardados en Firestore pero el perfil público ya no estará accesible.`);
-      if (!confirmed) return;
-      await toggleClientStatus(client.id, 'inactive');
-      showToast('Perfil desactivado correctamente');
-    } else {
-      const confirmed = window.confirm(`¿Quieres volver a activar este perfil?`);
-      if (!confirmed) return;
-      await toggleClientStatus(client.id, 'active');
-      showToast('Perfil activado correctamente');
-    }
+  const handleToggleStatus = (client: Client) => {
+    const isCurrentlyActive = client.status === 'active';
+    const newStatus: ClientStatus = isCurrentlyActive ? 'inactive' : 'active';
+
+    setConfirmDialog({
+      isOpen: true,
+      title: isCurrentlyActive ? '¿Pausar perfil público?' : '¿Activar perfil público?',
+      description: isCurrentlyActive
+        ? `¿Quieres pausar el perfil público de "${client.businessName}"? El perfil público (/p/${client.slug}) no estará visible para visitantes ni escaneos NFC, pero todos sus datos permanecerán guardados en Firestore y podrás reactivarlo en cualquier momento.`
+        : `¿Quieres volver a activar el perfil público de "${client.businessName}"? Su catálogo (/p/${client.slug}) y tarjeta NFC volverán a estar activos y accesibles de inmediato.`,
+      confirmText: isCurrentlyActive ? 'Pausar perfil' : 'Activar perfil',
+      variant: isCurrentlyActive ? 'warning' : 'success',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setIsTogglingStatusId(client.id);
+
+        // Actualización optimista inmediata en estado local
+        setClients(prev =>
+          prev.map(c =>
+            c.id === client.id
+              ? {
+                  ...c,
+                  status: newStatus,
+                  active: newStatus === 'active',
+                  profileStatus: newStatus === 'inactive' ? 'inactive' : 'active'
+                }
+              : c
+          )
+        );
+
+        try {
+          await toggleClientStatus(client.id, newStatus);
+          showToast(
+            newStatus === 'inactive'
+              ? `Perfil de "${client.businessName}" pausado correctamente.`
+              : `Perfil de "${client.businessName}" activado correctamente.`
+          );
+        } catch (err: any) {
+          console.error('Error al actualizar estado del cliente:', err);
+          showToast(err.message || 'Error al actualizar el estado del perfil', 'error');
+          // Revertir estado previo si falló
+          setClients(prev =>
+            prev.map(c =>
+              c.id === client.id
+                ? { ...c, status: client.status, active: client.active, profileStatus: client.profileStatus }
+                : c
+            )
+          );
+        } finally {
+          setIsTogglingStatusId(null);
+        }
+      }
+    });
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar a "${name}"? Esta acción se sincronizará con Firestore.`)) {
-      const deleted = await deleteClient(id);
-      if (deleted) {
-        showToast('Cliente eliminado correctamente');
-      } else {
-        showToast('No se pudo eliminar el cliente', 'error');
+  const handleDelete = (id: string, name: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '¿Eliminar cliente?',
+      description: `¿Estás seguro de que deseas eliminar permanentemente a "${name}"? Esta acción se sincronizará con Firestore.`,
+      confirmText: 'Eliminar cliente',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setIsDeletingClientId(id);
+        try {
+          const deleted = await deleteClient(id);
+          if (deleted) {
+            setClients(prev => prev.filter(c => c.id !== id));
+            showToast('Cliente eliminado correctamente');
+          } else {
+            showToast('No se pudo eliminar el cliente', 'error');
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Error al eliminar el cliente', 'error');
+        } finally {
+          setIsDeletingClientId(null);
+        }
       }
-    }
+    });
   };
 
   const handleInviteClient = async (client: Client) => {
@@ -169,13 +307,17 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
   };
 
   // Filtrar clientes
+  const normalizedTerm = normalizeLocationText(searchTerm);
   const filteredClients = clients.filter((c) => {
-    const matchesSearch = 
-      c.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.slug.toLowerCase().includes(searchTerm.toLowerCase());
+    const prov = getProvinceByCity(c.city || '') || '';
+    const matchesSearch =
+      !normalizedTerm ||
+      normalizeLocationText(c.businessName || '').includes(normalizedTerm) ||
+      normalizeLocationText(c.ownerName || '').includes(normalizedTerm) ||
+      normalizeLocationText(c.city || '').includes(normalizedTerm) ||
+      normalizeLocationText(prov).includes(normalizedTerm) ||
+      normalizeLocationText(c.category || '').includes(normalizedTerm) ||
+      normalizeLocationText(c.slug || '').includes(normalizedTerm);
 
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -452,6 +594,17 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                               <Send className="w-4 h-4" />
                             </button>
 
+                            {client.accessStatus === 'pending' && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickActivateAccess(client)}
+                                className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors cursor-pointer"
+                                title="Activar cuenta del cliente y marcar como Activo"
+                              >
+                                <ShieldCheck className="w-4 h-4" />
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
@@ -472,24 +625,34 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
 
                             <button
                               type="button"
+                              disabled={isTogglingStatusId === client.id || isDeletingClientId === client.id}
                               onClick={() => handleToggleStatus(client)}
                               className={`p-2 rounded-xl transition-colors cursor-pointer ${
                                 client.status === 'active'
                                   ? 'text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/60'
                                   : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
                               }`}
-                              title={client.status === 'active' ? 'Pausar/desactivar perfil' : 'Activar perfil'}
+                              title={client.status === 'active' ? 'Pausar perfil público' : 'Activar perfil público'}
                             >
-                              <Power className="w-4 h-4" />
+                              {isTogglingStatusId === client.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                              ) : (
+                                <Power className="w-4 h-4" />
+                              )}
                             </button>
 
                             <button
                               type="button"
+                              disabled={isDeletingClientId === client.id || isTogglingStatusId === client.id}
                               onClick={() => handleDelete(client.id, client.businessName)}
                               className="p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
                               title="Eliminar cliente permanentemente"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {isDeletingClientId === client.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
                             </button>
                           </div>
                         </td>
@@ -558,6 +721,18 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                         <span>Invitar</span>
                       </button>
 
+                      {client.accessStatus === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickActivateAccess(client)}
+                          className="min-h-[44px] py-2 px-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="Activar acceso al portal del cliente"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Activar</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
@@ -578,6 +753,7 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
 
                       <button
                         type="button"
+                        disabled={isTogglingStatusId === client.id}
                         onClick={() => handleToggleStatus(client)}
                         className={`col-span-2 sm:col-span-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                           client.status === 'active'
@@ -585,7 +761,11 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                             : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
                         }`}
                       >
-                        <Power className="w-4 h-4" />
+                        {isTogglingStatusId === client.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Power className="w-4 h-4" />
+                        )}
                         <span>{client.status === 'active' ? 'Pausar perfil' : 'Activar perfil'}</span>
                       </button>
                     </div>
@@ -677,6 +857,61 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
               >
                 <KeyRound className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Enviar correo directo de Firebase Auth</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Confirmación Sin Bloqueo de iFrame */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  confirmDialog.variant === 'danger'
+                    ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                    : confirmDialog.variant === 'warning'
+                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                }`}
+              >
+                {confirmDialog.variant === 'warning' || confirmDialog.variant === 'danger' ? (
+                  <AlertTriangle className="w-5 h-5" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-black text-slate-900 dark:text-white text-base">
+                  {confirmDialog.title}
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {confirmDialog.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                {confirmDialog.cancelText || 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-sm transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  confirmDialog.variant === 'danger'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : confirmDialog.variant === 'warning'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                <span>{confirmDialog.confirmText}</span>
               </button>
             </div>
           </div>

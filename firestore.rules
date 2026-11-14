@@ -42,9 +42,12 @@ service cloud.firestore {
 
     function isClientOwner(clientId) {
       return isAuthenticated() && (
+        ('clientId' in request.auth.token && request.auth.token.clientId == clientId) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientId == clientId) ||
-        ('clientId' in request.auth.token && request.auth.token.clientId == clientId)
+        (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        (resource != null && 'clientEmail' in resource.data && 'email' in request.auth.token && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
+        (resource != null && 'email' in resource.data && 'email' in request.auth.token && resource.data.email.lower() == request.auth.token.email.lower())
       );
     }
 
@@ -62,12 +65,12 @@ service cloud.firestore {
         (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client')
       );
 
-      // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o clientId)
+      // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o alterar clientId ya asignado)
       allow update: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == userId && 
-        request.resource.data.role == resource.data.role && 
-        request.resource.data.clientId == resource.data.clientId
+        (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client') &&
+        (!('clientId' in resource.data) || resource.data.clientId == null || request.resource.data.clientId == resource.data.clientId)
       );
 
       // Eliminación: solo ADMIN
@@ -85,17 +88,20 @@ service cloud.firestore {
       allow create: if isAdmin();
 
       // Actualización: ADMIN puede actualizar cualquier campo; CLIENT solo su propio negocio
-      // Permite también la actualización durante el flujo de activación del cliente autenticado
+      // Permite también la actualización durante el flujo de activación o auto-vinculación legítima del cliente autenticado
       allow update: if isAdmin() || (
-        // Flujo de activación legítima por el propio usuario recién autenticado
+        // Flujo de activación y vinculación legítima por el propio usuario autenticado
         (
           isAuthenticated() &&
-          request.auth.uid == request.resource.data.userId &&
+          (
+            request.auth.uid == request.resource.data.userId ||
+            ('email' in request.auth.token && 'clientEmail' in resource.data && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
+            ('email' in request.auth.token && 'email' in resource.data && resource.data.email.lower() == request.auth.token.email.lower())
+          ) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'userId', 'clientEmail', 'active', 'status', 'accessStatus', 'updatedAt', 'activationToken',
             'termsAccepted', 'privacyAccepted', 'termsAcceptedAt', 'privacyAcceptedAt', 'termsVersion', 'privacyVersion'
-          ]) &&
-          request.resource.data.accessStatus == 'active'
+          ])
         ) ||
         // Flujo normal de cliente propietario (excluyendo estados protegidos y contratos)
         (

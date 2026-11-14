@@ -29,7 +29,7 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
         if (isMounted) {
           setClient(fetched);
           setIsLoading(false);
-          if (fetched && fetched.status === 'active') {
+          if (fetched && fetched.status === 'active' && fetched.profileStatus !== 'inactive' && fetched.active !== false) {
             incrementClientViews(fetched.id);
           }
         }
@@ -59,8 +59,8 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
     );
   }
 
-  // 1. Si encontramos el cliente y está INACTIVO
-  if (client && client.status === 'inactive') {
+  // 1. Si encontramos el cliente y está INACTIVO o PAUSADO
+  if (client && (client.status === 'inactive' || client.profileStatus === 'inactive' || client.active === false)) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-white">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">

@@ -471,6 +471,7 @@ export async function updateClient(
     slug: updatedSlug,
     profileSlug: updatedSlug,
     active: updates.active !== undefined ? updates.active : (updates.status !== undefined ? updates.status === 'active' : (current.active !== undefined ? current.active : current.status === 'active')),
+    profileStatus: updates.profileStatus !== undefined ? updates.profileStatus : (updates.status === 'inactive' ? 'inactive' : (updates.status === 'active' ? 'active' : current.profileStatus || 'active')),
     id: current.id,
     createdAt: current.createdAt,
     updatedAt: now
@@ -508,17 +509,46 @@ export async function updateClient(
  * Establece status = 'inactive' sin borrar datos físicamente
  */
 export async function deactivateClient(id: string): Promise<Client | null> {
-  return updateClient(id, { status: 'inactive' });
+  return toggleClientStatus(id, 'inactive');
 }
 
 /**
  * CAMBIAR ESTADO DEL CLIENTE (active, pending, inactive)
+ * Actualiza status, active y profileStatus de forma sincronizada con Firestore y el backend.
  */
 export async function toggleClientStatus(
   id: string,
   newStatus: ClientStatus
 ): Promise<Client | null> {
-  return updateClient(id, { status: newStatus });
+  const isActive = newStatus === 'active';
+  const profStatus = newStatus === 'inactive' ? 'inactive' : 'active';
+
+  // 1. Intentar actualizar a través de la API del backend si el usuario está autenticado
+  if (isFirebaseConfigured && auth?.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await fetch('/api/admin/clients/toggle-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          clientId: id,
+          status: newStatus
+        })
+      });
+    } catch (apiErr) {
+      console.warn('Aviso en endpoint backend /api/admin/clients/toggle-status:', apiErr);
+    }
+  }
+
+  // 2. Aplicar actualización en Firestore y caché reactivo
+  return updateClient(id, { 
+    status: newStatus,
+    active: isActive,
+    profileStatus: profStatus
+  });
 }
 
 /**

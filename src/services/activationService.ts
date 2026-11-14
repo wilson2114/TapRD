@@ -465,8 +465,35 @@ export async function completeActivation(
 
   let authUid = `client_${Date.now()}`;
 
-  // 1. Crear o actualizar usuario en Firebase Authentication
-  if (isFirebaseConfigured && auth) {
+  // 1. Intentar completar la activación en el backend mediante Admin SDK
+  let backendActivated = false;
+  try {
+    const resp = await fetch('/api/client/complete-activation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword })
+    });
+    let data: any = null;
+    try {
+      data = await resp.json();
+    } catch {}
+    if (resp.ok && data && data.success) {
+      backendActivated = true;
+      if (data.userId) authUid = data.userId;
+      // Iniciar sesión con la contraseña recién establecida
+      if (isFirebaseConfigured && auth) {
+        try {
+          const cred = await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
+          authUid = cred.user.uid;
+        } catch {}
+      }
+    }
+  } catch (apiErr) {
+    console.warn('[ActivationService] Aviso conectando con API de activación:', apiErr);
+  }
+
+  // Si no se pudo completar vía backend, intentar directamente en cliente
+  if (!backendActivated && isFirebaseConfigured && auth) {
     try {
       const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
       authUid = userCred.user.uid;

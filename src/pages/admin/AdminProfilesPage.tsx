@@ -4,16 +4,18 @@ import { useClients } from '../../hooks/useClients';
 import { PUBLIC_BASE_URL } from '../../config/constants';
 import { Client } from '../../types';
 import { ProfileQRCode } from '../../components/admin/ProfileQRCode';
-import { Globe, ExternalLink, QrCode, Copy, Check, Radio, Edit3, Sparkles, Loader2 } from 'lucide-react';
+import { Globe, ExternalLink, QrCode, Copy, Check, Radio, Edit3, Sparkles, Loader2, Power } from 'lucide-react';
+import { ClientStatus } from '../../types';
 
 interface AdminProfilesPageProps {
   onNavigate: (path: string) => void;
 }
 
 export function AdminProfilesPage({ onNavigate }: AdminProfilesPageProps) {
-  const { clients, loading } = useClients();
+  const { clients, loading, setStatus } = useClients();
   const [selectedClientForQr, setSelectedClientForQr] = useState<Client | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const handleCopy = async (slug: string) => {
     const url = `${PUBLIC_BASE_URL}/p/${slug}`;
@@ -22,6 +24,18 @@ export function AdminProfilesPage({ onNavigate }: AdminProfilesPageProps) {
       setCopiedSlug(slug);
       setTimeout(() => setCopiedSlug(null), 2000);
     } catch {}
+  };
+
+  const handleToggleProfile = async (client: Client) => {
+    const nextStatus: ClientStatus = client.status === 'active' ? 'inactive' : 'active';
+    setTogglingId(client.id);
+    try {
+      await setStatus(client.id, nextStatus);
+    } catch (err) {
+      console.error('Error toggling profile status:', err);
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   return (
@@ -113,11 +127,12 @@ export function AdminProfilesPage({ onNavigate }: AdminProfilesPageProps) {
                 </div>
 
                 {/* Actions */}
-                <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2">
+                <div className="pt-2 border-t border-slate-100 grid grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => handleCopy(client.slug)}
                     className="py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer"
+                    title="Copiar enlace"
                   >
                     {copiedSlug === client.slug ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>Copiar</span>
@@ -127,6 +142,7 @@ export function AdminProfilesPage({ onNavigate }: AdminProfilesPageProps) {
                     type="button"
                     onClick={() => setSelectedClientForQr(client)}
                     className="py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 hover:bg-slate-800 cursor-pointer"
+                    title="Ver Código QR"
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     <span>QR</span>
@@ -136,9 +152,29 @@ export function AdminProfilesPage({ onNavigate }: AdminProfilesPageProps) {
                     type="button"
                     onClick={() => onNavigate(`/p/${client.slug}`)}
                     className="py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center gap-1 hover:bg-blue-100 cursor-pointer"
+                    title="Abrir perfil público"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>Abrir</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={togglingId === client.id}
+                    onClick={() => handleToggleProfile(client)}
+                    className={`py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                      client.status === 'active'
+                        ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                    title={client.status === 'active' ? 'Pausar perfil público' : 'Activar perfil público'}
+                  >
+                    {togglingId === client.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Power className="w-3.5 h-3.5" />
+                    )}
+                    <span>{client.status === 'active' ? 'Pausar' : 'Activar'}</span>
                   </button>
                 </div>
               </div>

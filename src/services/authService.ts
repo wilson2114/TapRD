@@ -66,8 +66,10 @@ export function initAuthObserver(): void {
           let userRole: UserRole = isSuperOwner ? 'superadmin' : 'client';
           let displayName = fbUser.displayName || (isSuperOwner ? 'Wilson Abelino Brito' : cleanEmail.split('@')[0] || 'Cliente');
 
-          if (snap.exists()) {
-            const data = snap.data();
+          const data = snap.exists() ? snap.data() : null;
+          let knownClientId = data?.clientId as string | undefined;
+
+          if (snap.exists() && data) {
             if (isSuperOwner) {
               userRole = 'superadmin';
             } else {
@@ -84,7 +86,7 @@ export function initAuthObserver(): void {
             } catch {}
           } else {
             // Crear registro en Firestore con rol estricto
-            const newUserData = {
+            const newUserData: Record<string, any> = {
               uid: fbUser.uid,
               email: cleanEmail,
               displayName,
@@ -93,8 +95,18 @@ export function initAuthObserver(): void {
               lastLogin: now
             };
             try {
-              await setDoc(userRef, newUserData);
+              await setDoc(userRef, newUserData, { merge: true });
             } catch {}
+          }
+
+          // Si es cliente, sincronizar y asegurar sesión comercial en caché
+          let clientData: Client | null = null;
+          if (!isSuperOwner) {
+            clientData = await findAndLinkClient(fbUser.uid, cleanEmail, knownClientId);
+            if (clientData) {
+              displayName = clientData.businessName || displayName;
+              knownClientId = clientData.id;
+            }
           }
 
           const userObj: AppUser = {
@@ -102,11 +114,15 @@ export function initAuthObserver(): void {
             email: cleanEmail,
             displayName,
             role: userRole,
+            clientId: knownClientId,
             createdAt: snap.exists() ? snap.data()?.createdAt : now,
             lastLogin: now
           };
 
           cachedCurrentUser = userObj;
+          if (clientData) {
+            localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(clientData));
+          }
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(userObj));
           notifySubscribers(userObj);
         } catch (err) {
@@ -122,6 +138,7 @@ export function initAuthObserver(): void {
 
         cachedCurrentUser = null;
         localStorage.removeItem(SESSION_STORAGE_KEY);
+        localStorage.removeItem(CLIENT_SESSION_KEY);
         notifySubscribers(null);
       }
     });
@@ -387,6 +404,136 @@ export async function logoutAdmin(): Promise<void> {
 export const CLIENT_SESSION_KEY = 'taprd_client_session';
 
 /**
+ * Busca y auto-vincula el negocio del cliente con máxima resiliencia:
+ * 1. Por ID si el documento users/{uid} ya contiene clientId
+ * 2. Por coincidencia exacta userId == fbUid
+ * 3. Por clientEmail (correo de acceso al portal)
+ * 4. Por email comercial del negocio
+ * 5. Búsqueda exhaustiva case-insensitive en Firestore
+ * 6. Auto-sincroniza en Firestore users/{uid} y clients/{clientId} para que
+ *    futuras sesiones e inicios de sesión tras cerrar sesión lo reconozcan de inmediato.
+ */
+export async function findAndLinkClient(
+  fbUid: string,
+  userEmail: string,
+  knownClientId?: string
+): Promise<Client | null> {
+  if (!isFirebaseConfigured) return null;
+  const cleanEmail = userEmail.trim().toLowerCase();
+  const clientsRef = collection(db, 'clients');
+  let clientDoc: Client | null = null;
+
+  // 1. Por knownClientId si está disponible
+  if (knownClientId) {
+    try {
+      const cSnap = await getDoc(doc(db, 'clients', knownClientId));
+      if (cSnap.exists()) {
+        clientDoc = { ...(cSnap.data() as Client), id: cSnap.id };
+      }
+    } catch (e) {
+      console.warn('[authService] Error consultando cliente por knownClientId:', e);
+    }
+  }
+
+  // 2. Por userId == fbUid
+  if (!clientDoc) {
+    try {
+      const qUser = query(clientsRef, where('userId', '==', fbUid));
+      const snapUser = await getDocs(qUser);
+      if (!snapUser.empty) {
+        clientDoc = { ...(snapUser.docs[0].data() as Client), id: snapUser.docs[0].id };
+      }
+    } catch (e) {
+      console.warn('[authService] Error buscando cliente por userId:', e);
+    }
+  }
+
+  // 3. Por clientEmail
+  if (!clientDoc && cleanEmail) {
+    try {
+      const qClientEmail = query(clientsRef, where('clientEmail', '==', cleanEmail));
+      const snapClientEmail = await getDocs(qClientEmail);
+      if (!snapClientEmail.empty) {
+        clientDoc = { ...(snapClientEmail.docs[0].data() as Client), id: snapClientEmail.docs[0].id };
+      }
+    } catch {}
+  }
+
+  // 4. Por email general
+  if (!clientDoc && cleanEmail) {
+    try {
+      const qEmail = query(clientsRef, where('email', '==', cleanEmail));
+      const snapEmail = await getDocs(qEmail);
+      if (!snapEmail.empty) {
+        clientDoc = { ...(snapEmail.docs[0].data() as Client), id: snapEmail.docs[0].id };
+      }
+    } catch {}
+  }
+
+  // 5. Búsqueda exhaustiva case-insensitive en Firestore
+  if (!clientDoc && cleanEmail) {
+    try {
+      const allClientsSnap = await getDocs(clientsRef);
+      for (const d of allClientsSnap.docs) {
+        const data = d.data() as Client;
+        const dClientEmail = (data.clientEmail || '').trim().toLowerCase();
+        const dEmail = (data.email || '').trim().toLowerCase();
+        if (dClientEmail === cleanEmail || dEmail === cleanEmail || data.userId === fbUid) {
+          clientDoc = { ...data, id: d.id };
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn('[authService] Error en búsqueda exhaustiva de cliente:', e);
+    }
+  }
+
+  // 6. Si se encontró el cliente, auto-vincular de forma consistente
+  if (clientDoc) {
+    const now = new Date().toISOString();
+    // Auto-vincular en documento clients/{id}
+    try {
+      if (clientDoc.userId !== fbUid || clientDoc.accessStatus !== 'active' || clientDoc.clientEmail !== cleanEmail) {
+        await updateDoc(doc(db, 'clients', clientDoc.id), {
+          userId: fbUid,
+          clientEmail: cleanEmail,
+          accessStatus: clientDoc.accessStatus === 'suspended' ? 'suspended' : 'active',
+          updatedAt: now
+        });
+        clientDoc.userId = fbUid;
+        clientDoc.clientEmail = cleanEmail;
+        if (clientDoc.accessStatus !== 'suspended') {
+          clientDoc.accessStatus = 'active';
+        }
+      }
+    } catch (updateErr) {
+      console.warn('[authService] Aviso auto-vinculando cliente en Firestore:', updateErr);
+    }
+
+    // Auto-vincular en documento users/{fbUid}
+    try {
+      const userRef = doc(db, 'users', fbUid);
+      await setDoc(userRef, {
+        uid: fbUid,
+        email: cleanEmail,
+        clientId: clientDoc.id,
+        role: 'CLIENT',
+        active: true,
+        updatedAt: now
+      }, { merge: true });
+    } catch (userErr) {
+      console.warn('[authService] Aviso auto-vinculando users/{uid} en Firestore:', userErr);
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(clientDoc));
+    }
+  }
+
+  return clientDoc;
+}
+
+/**
  * INICIAR SESIÓN DE CLIENTE (loginClient)
  * Verifica credenciales con Firebase Auth, obtiene su negocio y valida que no esté suspendido.
  */
@@ -487,55 +634,17 @@ export async function loginClient(
     const userSnap = await getDoc(userRef);
     let userRole: UserRole = 'client';
     let displayName = fbUser.displayName || cleanEmail.split('@')[0];
+    let knownClientId: string | undefined = undefined;
 
     if (userSnap.exists()) {
       const uData = userSnap.data();
       userRole = (uData.role as UserRole) || 'client';
       if (uData.displayName) displayName = uData.displayName;
+      knownClientId = uData.clientId;
     }
 
-    // 2. Buscar el cliente asociado en la colección 'clients'
-    let clientDoc: Client | null = null;
-    const clientsRef = collection(db, 'clients');
-
-    // Búsqueda prioritaria por userId == fbUser.uid
-    const qUser = query(clientsRef, where('userId', '==', fbUser.uid));
-    const snapUser = await getDocs(qUser);
-
-    if (!snapUser.empty) {
-      clientDoc = { ...(snapUser.docs[0].data() as Client), id: snapUser.docs[0].id };
-    } else {
-      // Búsqueda por clientEmail
-      const qEmail = query(clientsRef, where('clientEmail', '==', cleanEmail));
-      const snapEmail = await getDocs(qEmail);
-      if (!snapEmail.empty) {
-        clientDoc = { ...(snapEmail.docs[0].data() as Client), id: snapEmail.docs[0].id };
-        try {
-          await updateDoc(doc(db, 'clients', clientDoc.id), {
-            userId: fbUser.uid,
-            accessStatus: 'active',
-            updatedAt: now
-          });
-          clientDoc.userId = fbUser.uid;
-        } catch {}
-      } else {
-        // Búsqueda por email general del negocio
-        const qFallbackEmail = query(clientsRef, where('email', '==', cleanEmail));
-        const snapFallback = await getDocs(qFallbackEmail);
-        if (!snapFallback.empty) {
-          clientDoc = { ...(snapFallback.docs[0].data() as Client), id: snapFallback.docs[0].id };
-          try {
-            await updateDoc(doc(db, 'clients', clientDoc.id), {
-              userId: fbUser.uid,
-              clientEmail: cleanEmail,
-              accessStatus: 'active',
-              updatedAt: now
-            });
-            clientDoc.userId = fbUser.uid;
-          } catch {}
-        }
-      }
-    }
+    // 2. Buscar y vincular el cliente asociado con máxima resiliencia
+    const clientDoc = await findAndLinkClient(fbUser.uid, cleanEmail, knownClientId);
 
     // Si es un administrador intentando acceder al portal de clientes
     if (!clientDoc && (userRole === 'admin' || userRole === 'superadmin')) {
@@ -567,6 +676,7 @@ export async function loginClient(
       email: cleanEmail,
       displayName: clientDoc.businessName || displayName,
       role: 'client',
+      clientId: clientDoc.id,
       createdAt: now,
       lastLogin: now
     };
@@ -607,77 +717,46 @@ export async function logoutClient(): Promise<void> {
  * OBTENER EL NEGOCIO ACTUAL DEL CLIENTE (getCurrentClient)
  */
 export async function getCurrentClient(): Promise<Client | null> {
+  // 1. Revisar si hay sesión activa en localStorage
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(CLIENT_SESSION_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Client;
         if (parsed && parsed.id) {
-          // Refrescar en segundo plano de Firestore si hay conexión
+          // Si además hay usuario de Firebase autenticado, validar correspondencia
           if (auth.currentUser && isFirebaseConfigured) {
-            try {
-              const docRef = doc(db, 'clients', parsed.id);
-              const snap = await getDoc(docRef);
-              if (snap.exists()) {
-                const fresh = { ...(snap.data() as Client), id: snap.id };
-                localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(fresh));
-                return fresh;
-              }
-            } catch {}
+            if (!parsed.userId || parsed.userId === auth.currentUser.uid) {
+              return parsed;
+            }
+          } else {
+            return parsed;
           }
-          return parsed;
         }
       }
     } catch {}
   }
 
-  // Buscar por auth.currentUser.uid
+  // 2. Si no está en caché o necesitamos buscar por el usuario actual autenticado
   if (auth.currentUser && isFirebaseConfigured) {
+    const userEmail = auth.currentUser.email || '';
+    let knownClientId: string | undefined = undefined;
+
     try {
-      const q = query(collection(db, 'clients'), where('userId', '==', auth.currentUser.uid));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const client = { ...(snap.docs[0].data() as Client), id: snap.docs[0].id };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(client));
-        }
-        return client;
+      const uSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      if (uSnap.exists()) {
+        knownClientId = uSnap.data()?.clientId;
       }
-    } catch (e) {
-      console.warn('Aviso buscando cliente en Firestore por userId:', e);
-    }
+    } catch {}
 
-    // Si no está vinculado por userId, buscar por clientEmail o email registrado
-    const userEmail = auth.currentUser.email?.toLowerCase();
-    if (userEmail) {
-      try {
-        const qClientEmail = query(collection(db, 'clients'), where('clientEmail', '==', userEmail));
-        const snapClientEmail = await getDocs(qClientEmail);
-        if (!snapClientEmail.empty) {
-          const docSnap = snapClientEmail.docs[0];
-          const client = { ...(docSnap.data() as Client), id: docSnap.id };
-          // Auto-vincular userId
-          updateDoc(doc(db, 'clients', docSnap.id), { userId: auth.currentUser.uid }).catch(() => {});
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(client));
-          }
-          return client;
-        }
+    const resolvedClient = await findAndLinkClient(
+      auth.currentUser.uid,
+      userEmail,
+      knownClientId
+    );
 
-        const qEmail = query(collection(db, 'clients'), where('email', '==', userEmail));
-        const snapEmail = await getDocs(qEmail);
-        if (!snapEmail.empty) {
-          const docSnap = snapEmail.docs[0];
-          const client = { ...(docSnap.data() as Client), id: docSnap.id };
-          updateDoc(doc(db, 'clients', docSnap.id), { userId: auth.currentUser.uid }).catch(() => {});
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(client));
-          }
-          return client;
-        }
-      } catch (e) {
-        console.warn('Aviso buscando cliente en Firestore por email:', e);
-      }
+    if (resolvedClient) {
+      return resolvedClient;
     }
   }
 
@@ -935,43 +1014,8 @@ export async function loginUser(email: string, pass: string): Promise<LoginUserR
     }
 
     // Si es CLIENT
-    // Buscar su documento en clients
-    let clientDoc: Client | null = null;
-    const clientsRef = collection(db, 'clients');
-
-    // 1. Por clientId si está especificado
-    if (clientId) {
-      try {
-        const cSnap = await getDoc(doc(db, 'clients', clientId));
-        if (cSnap.exists()) {
-          clientDoc = { ...(cSnap.data() as Client), id: cSnap.id };
-        }
-      } catch {}
-    }
-
-    // 2. Por userId == fbUser.uid
-    if (!clientDoc) {
-      const qUser = query(clientsRef, where('userId', '==', fbUser.uid));
-      const snapUser = await getDocs(qUser);
-      if (!snapUser.empty) {
-        clientDoc = { ...(snapUser.docs[0].data() as Client), id: snapUser.docs[0].id };
-      }
-    }
-
-    // 3. Por email o clientEmail
-    if (!clientDoc) {
-      const qEmail = query(clientsRef, where('clientEmail', '==', cleanEmail));
-      const snapEmail = await getDocs(qEmail);
-      if (!snapEmail.empty) {
-        clientDoc = { ...(snapEmail.docs[0].data() as Client), id: snapEmail.docs[0].id };
-      } else {
-        const qFallback = query(clientsRef, where('email', '==', cleanEmail));
-        const snapFallback = await getDocs(qFallback);
-        if (!snapFallback.empty) {
-          clientDoc = { ...(snapFallback.docs[0].data() as Client), id: snapFallback.docs[0].id };
-        }
-      }
-    }
+    // 1. Buscar y auto-vincular el cliente asociado con máxima resiliencia
+    const clientDoc = await findAndLinkClient(fbUser.uid, cleanEmail, clientId);
 
     // Validar si el cliente existe y está suspendido
     if (clientDoc) {

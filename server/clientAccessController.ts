@@ -23,6 +23,17 @@ function encodeTokenPayload(payload: { c: string; e: string; b?: string; o?: str
   return `act_${base64}`;
 }
 
+function decodeTokenPayload(token: string): any {
+  try {
+    if (!token.startsWith('act_')) return null;
+    const base64 = token.substring(4);
+    const json = Buffer.from(base64, 'base64url').toString('utf8');
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 async function verifyAdminAuth(req: Request): Promise<AuthContext | null> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -488,8 +499,8 @@ export async function suspendClientAccessHandler(req: Request, res: Response): P
 }
 
 /**
- * 4. reactivateClientAccess
- * Reactiva el acceso del cliente al portal (Regla 14).
+ * 4. reactivateClientAccess / activateClientAccess
+ * Activa o reactiva el acceso del cliente al portal (Regla 14).
  */
 export async function reactivateClientAccessHandler(req: Request, res: Response): Promise<void> {
   const adminUser = await verifyAdminAuth(req);
@@ -508,28 +519,83 @@ export async function reactivateClientAccessHandler(req: Request, res: Response)
 
   try {
     let userId = '';
+    let targetEmail = '';
+    const nowIso = new Date().toISOString();
+
     if (isConfigured && db) {
       const clientDoc = await db.collection('clients').doc(clientId).get();
       if (!clientDoc.exists) {
         res.status(404).json({ error: 'Cliente no encontrado.' });
         return;
       }
-      userId = clientDoc.data()?.userId;
+      const cData = clientDoc.data() || {};
+      userId = cData.userId;
+      targetEmail = (cData.clientEmail || cData.email || '').trim().toLowerCase();
+
+      // Si no tiene userId en el documento, buscar por email en Auth o users
+      if (!userId && targetEmail && auth) {
+        try {
+          const authUser = await auth.getUserByEmail(targetEmail);
+          if (authUser) {
+            userId = authUser.uid;
+          }
+        } catch {}
+      }
+
+      if (!userId && targetEmail) {
+        try {
+          const uQuery = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
+          if (!uQuery.empty) {
+            userId = uQuery.docs[0].id;
+          }
+        } catch {}
+      }
 
       // Actualizar accessStatus a active en Firestore
-      await db.collection('clients').doc(clientId).update({
+      const clientUpdates: Record<string, any> = {
         accessStatus: 'active',
-        updatedAt: new Date().toISOString()
-      });
+        active: true,
+        updatedAt: nowIso
+      };
+      if (userId) {
+        clientUpdates.userId = userId;
+      }
+      if (targetEmail) {
+        clientUpdates.clientEmail = targetEmail;
+      }
+      await db.collection('clients').doc(clientId).update(clientUpdates);
+
+      // Si existe documento en users/{userId}, asegurar active: true
+      if (userId) {
+        try {
+          await db.collection('users').doc(userId).set({
+            active: true,
+            role: 'CLIENT',
+            clientId,
+            updatedAt: nowIso
+          }, { merge: true });
+        } catch {}
+      }
+
+      // Si existía un token de activación no consumido, marcarlo como usado
+      if (cData.activationToken) {
+        try {
+          await db.collection('activations').doc(cData.activationToken).update({
+            used: true,
+            usedAt: nowIso,
+            activatedUid: userId || 'admin_activation'
+          });
+        } catch {}
+      }
     }
 
-    // Reactivar usuario en Firebase Authentication
+    // Habilitar / Desbloquear usuario en Firebase Authentication
     if (isConfigured && auth && userId) {
       try {
         await auth.updateUser(userId, { disabled: false });
-        console.log(`[AdminAccess] Usuario ${userId} reactivado en Firebase Auth`);
+        console.log(`[AdminAccess] Usuario ${userId} activado/reactivado en Firebase Auth`);
       } catch (err) {
-        console.warn('[AdminAccess] No se pudo reactivar en Auth:', err);
+        console.warn('[AdminAccess] Aviso actualizando usuario en Auth:', err);
       }
     }
 
@@ -544,10 +610,473 @@ export async function reactivateClientAccessHandler(req: Request, res: Response)
     res.status(200).json({
       success: true,
       clientId,
+      userId,
       accessStatus: 'active',
-      message: 'El acceso del cliente ha sido reactivado correctamente.'
+      message: 'El acceso del cliente ha sido activado correctamente.'
     });
   } catch (err) {
-    res.status(500).json({ error: 'No se pudo reactivar el acceso del cliente.' });
+    console.error('[AdminAccess] Error al activar acceso:', err);
+    res.status(500).json({ error: 'No se pudo activar el acceso del cliente.' });
   }
 }
+
+/**
+ * 5. verifyClientAccessStatusHandler
+ * Comprueba el estado real de un cliente consultando Firebase Authentication y Firestore.
+ * Si el usuario ya existe en Auth, está activo y vinculado, actualiza clients/{clientId} a 'active'.
+ */
+export async function verifyClientAccessStatusHandler(req: Request, res: Response): Promise<void> {
+  const adminUser = await verifyAdminAuth(req);
+  if (!adminUser) {
+    res.status(403).json({ error: 'No tienes permisos administrativos para verificar accesos.' });
+    return;
+  }
+
+  const { clientId, userId, email } = req.body;
+  if (!clientId) {
+    res.status(400).json({ error: 'El identificador del cliente (clientId) es obligatorio.' });
+    return;
+  }
+
+  const { auth, db, isConfigured } = getFirebaseAdmin();
+
+  try {
+    let clientData: any = null;
+    let targetUserId = userId;
+    let targetEmail = email ? email.trim().toLowerCase() : '';
+
+    if (isConfigured && db) {
+      const clientDoc = await db.collection('clients').doc(clientId).get();
+      if (clientDoc.exists) {
+        clientData = clientDoc.data();
+        if (!targetUserId) targetUserId = clientData.userId;
+        if (!targetEmail) targetEmail = (clientData.clientEmail || clientData.email || '').trim().toLowerCase();
+      }
+    }
+
+    // 1. Si está explícitamente suspendido por el administrador
+    if (clientData?.accessStatus === 'suspended') {
+      res.status(200).json({
+        success: true,
+        clientId,
+        accessStatus: 'suspended',
+        userId: targetUserId,
+        email: targetEmail
+      });
+      return;
+    }
+
+    let authUser: any = null;
+    if (isConfigured && auth) {
+      if (targetUserId) {
+        try {
+          authUser = await auth.getUser(targetUserId);
+        } catch {}
+      }
+      if (!authUser && targetEmail) {
+        try {
+          authUser = await auth.getUserByEmail(targetEmail);
+          if (authUser && !targetUserId) targetUserId = authUser.uid;
+        } catch {}
+      }
+    }
+
+    let userDocData: any = null;
+    if (isConfigured && db) {
+      if (targetUserId) {
+        try {
+          const uDoc = await db.collection('users').doc(targetUserId).get();
+          if (uDoc.exists) {
+            userDocData = uDoc.data();
+          }
+        } catch {}
+      }
+      if (!userDocData && targetEmail) {
+        try {
+          const uQuery = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
+          if (!uQuery.empty) {
+            userDocData = uQuery.docs[0].data();
+            if (!targetUserId) targetUserId = uQuery.docs[0].id;
+          }
+        } catch {}
+      }
+      if (!userDocData && clientId) {
+        try {
+          const uQuery = await db.collection('users').where('clientId', '==', clientId).limit(1).get();
+          if (!uQuery.empty) {
+            userDocData = uQuery.docs[0].data();
+            if (!targetUserId) targetUserId = uQuery.docs[0].id;
+          }
+        } catch {}
+      }
+    }
+
+    let realStatus: 'none' | 'pending' | 'active' | 'suspended' = 'none';
+
+    if (authUser) {
+      if (authUser.disabled || userDocData?.active === false) {
+        realStatus = 'suspended';
+      } else {
+        // El cliente tiene una cuenta válida en Firebase Authentication y está habilitado
+        realStatus = 'active';
+      }
+    } else if (userDocData && userDocData.active !== false && (userDocData.role === 'CLIENT' || userDocData.role === 'client')) {
+      realStatus = 'active';
+    } else if (clientData?.activationToken || clientData?.accessStatus === 'pending') {
+      realStatus = 'pending';
+    } else if (clientData?.userId) {
+      realStatus = 'active';
+    } else {
+      realStatus = 'none';
+    }
+
+    // Si el estado real es 'active' y en Firestore figuraba como 'pending', auto-sincronizar
+    if (isConfigured && db && clientData && realStatus === 'active' && clientData.accessStatus !== 'active') {
+      try {
+        const updates: Record<string, any> = {
+          accessStatus: 'active',
+          updatedAt: new Date().toISOString()
+        };
+        if (targetUserId && clientData.userId !== targetUserId) {
+          updates.userId = targetUserId;
+        }
+        if (authUser?.email && clientData.clientEmail !== authUser.email) {
+          updates.clientEmail = authUser.email;
+        }
+        await db.collection('clients').doc(clientId).update(updates);
+        console.log(`[AdminAccess] Auto-sincronizado cliente ${clientId} a 'active'`);
+      } catch (syncErr) {
+        console.warn('[AdminAccess] Aviso actualizando client doc en verify:', syncErr);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      clientId,
+      accessStatus: realStatus,
+      userId: targetUserId || authUser?.uid,
+      email: targetEmail || authUser?.email
+    });
+  } catch (err: any) {
+    console.error('[AdminAccess] Error en verifyClientAccessStatusHandler:', err);
+    res.status(500).json({ error: 'Error al verificar el estado del cliente.' });
+  }
+}
+
+/**
+ * 6. batchVerifyClientAccessStatusesHandler
+ * Verifica en lote el estado real de múltiples clientes.
+ */
+export async function batchVerifyClientAccessStatusesHandler(req: Request, res: Response): Promise<void> {
+  const adminUser = await verifyAdminAuth(req);
+  if (!adminUser) {
+    res.status(403).json({ error: 'No tienes permisos administrativos.' });
+    return;
+  }
+
+  const { clients } = req.body;
+  if (!Array.isArray(clients) || clients.length === 0) {
+    res.status(400).json({ error: 'Se requiere una lista de clientes para verificar.' });
+    return;
+  }
+
+  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const statuses: Record<string, 'none' | 'pending' | 'active' | 'suspended'> = {};
+
+  try {
+    for (const c of clients) {
+      if (!c.id) continue;
+      let targetUserId = c.userId;
+      let targetEmail = (c.email || c.clientEmail || '').trim().toLowerCase();
+      let currentAccessStatus = c.accessStatus;
+
+      if (currentAccessStatus === 'suspended') {
+        statuses[c.id] = 'suspended';
+        continue;
+      }
+
+      let authUser: any = null;
+      let userDoc: any = null;
+
+      if (isConfigured && db && targetUserId) {
+        try {
+          const uSnap = await db.collection('users').doc(targetUserId).get();
+          if (uSnap.exists) {
+            userDoc = uSnap.data();
+          }
+        } catch {}
+      }
+
+      if (isConfigured && db && !userDoc && targetEmail) {
+        try {
+          const uQuery = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
+          if (!uQuery.empty) {
+            userDoc = uQuery.docs[0].data();
+            if (!targetUserId) targetUserId = uQuery.docs[0].id;
+          }
+        } catch {}
+      }
+
+      if (isConfigured && db && !userDoc && c.id) {
+        try {
+          const uQuery = await db.collection('users').where('clientId', '==', c.id).limit(1).get();
+          if (!uQuery.empty) {
+            userDoc = uQuery.docs[0].data();
+            if (!targetUserId) targetUserId = uQuery.docs[0].id;
+          }
+        } catch {}
+      }
+
+      if (isConfigured && auth) {
+        if (targetUserId) {
+          try {
+            authUser = await auth.getUser(targetUserId);
+          } catch {}
+        }
+        if (!authUser && targetEmail) {
+          try {
+            authUser = await auth.getUserByEmail(targetEmail);
+            if (authUser && !targetUserId) targetUserId = authUser.uid;
+          } catch {}
+        }
+      }
+
+      let realStatus: 'none' | 'pending' | 'active' | 'suspended' = 'none';
+
+      if (authUser) {
+        if (authUser.disabled || userDoc?.active === false) {
+          realStatus = 'suspended';
+        } else {
+          realStatus = 'active';
+        }
+      } else if (userDoc && userDoc.active !== false && (userDoc.role === 'CLIENT' || userDoc.role === 'client')) {
+        realStatus = 'active';
+      } else if (c.userId && c.userId.length > 15) {
+        realStatus = 'active';
+      } else if (currentAccessStatus === 'pending' || c.activationToken) {
+        realStatus = 'pending';
+      } else if (currentAccessStatus === 'active') {
+        realStatus = 'active';
+      } else {
+        realStatus = 'none';
+      }
+
+      statuses[c.id] = realStatus;
+
+      // Auto-sincronizar en Firestore si correspondía
+      if (isConfigured && db && realStatus === 'active' && currentAccessStatus !== 'active') {
+        try {
+          const syncUpdates: Record<string, any> = {
+            accessStatus: 'active',
+            updatedAt: new Date().toISOString()
+          };
+          if (targetUserId && c.userId !== targetUserId) {
+            syncUpdates.userId = targetUserId;
+          }
+          await db.collection('clients').doc(c.id).update(syncUpdates);
+        } catch {}
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      statuses
+    });
+  } catch (err: any) {
+    console.error('[AdminAccess] Error en batchVerifyClientAccessStatusesHandler:', err);
+    res.status(500).json({ error: 'Error verificando lote de clientes.' });
+  }
+}
+
+/**
+ * 7. completeActivationHandler
+ * Completa la activación de un cliente mediante el token seguro.
+ * Asigna la contraseña elegida en Firebase Authentication usando Admin SDK.
+ */
+export async function completeActivationHandler(req: Request, res: Response): Promise<void> {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    res.status(400).json({ error: 'Token y contraseña son obligatorios.' });
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+    return;
+  }
+
+  const { auth, db, isConfigured } = getFirebaseAdmin();
+  if (!isConfigured || !auth || !db) {
+    res.status(503).json({ error: 'El servicio de autenticación no está disponible en este momento.' });
+    return;
+  }
+
+  try {
+    // 1. Verificar token
+    let tokenData: any = null;
+    const actDoc = await db.collection('activations').doc(token).get();
+    if (actDoc.exists) {
+      tokenData = actDoc.data();
+      if (tokenData.used) {
+        res.status(400).json({ error: 'Este enlace de activación ya fue utilizado previamente.' });
+        return;
+      }
+      if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
+        res.status(400).json({ error: 'Este enlace de activación ha expirado. Solicita una nueva invitación.' });
+        return;
+      }
+    } else {
+      // Intentar decodificar payload
+      const payload = decodeTokenPayload(token);
+      if (payload && payload.c && payload.e) {
+        tokenData = {
+          clientId: payload.c,
+          email: payload.e,
+          expiresAt: payload.x
+        };
+        if (payload.x && Date.now() > payload.x) {
+          res.status(400).json({ error: 'Este enlace de activación ha expirado.' });
+          return;
+        }
+      }
+    }
+
+    if (!tokenData || !tokenData.email || !tokenData.clientId) {
+      res.status(400).json({ error: 'Enlace de activación inválido.' });
+      return;
+    }
+
+    const cleanEmail = tokenData.email.trim().toLowerCase();
+    const clientId = tokenData.clientId;
+    const nowIso = new Date().toISOString();
+
+    // 2. Buscar o crear usuario en Firebase Authentication
+    let authUser: any = null;
+    try {
+      authUser = await auth.getUserByEmail(cleanEmail);
+    } catch {}
+
+    let authUid = '';
+    if (authUser) {
+      authUid = authUser.uid;
+      await auth.updateUser(authUid, {
+        password: newPassword,
+        disabled: false
+      });
+    } else {
+      const created = await auth.createUser({
+        email: cleanEmail,
+        password: newPassword,
+        disabled: false
+      });
+      authUid = created.uid;
+    }
+
+    // 3. Actualizar Firestore
+    const batch = db.batch();
+    const clientRef = db.collection('clients').doc(clientId);
+    const userRef = db.collection('users').doc(authUid);
+    const actRef = db.collection('activations').doc(token);
+
+    batch.set(clientRef, {
+      userId: authUid,
+      clientEmail: cleanEmail,
+      active: true,
+      status: 'active',
+      accessStatus: 'active',
+      updatedAt: nowIso
+    }, { merge: true });
+
+    batch.set(userRef, {
+      uid: authUid,
+      email: cleanEmail,
+      role: 'CLIENT',
+      clientId,
+      active: true,
+      updatedAt: nowIso
+    }, { merge: true });
+
+    batch.set(actRef, {
+      used: true,
+      usedAt: nowIso,
+      activatedUid: authUid
+    }, { merge: true });
+
+    await batch.commit();
+
+    res.status(200).json({
+      success: true,
+      userId: authUid,
+      clientId,
+      email: cleanEmail,
+      message: 'Cuenta activada correctamente.'
+    });
+  } catch (err: any) {
+    console.error('[AdminAccess] Error en completeActivationHandler:', err);
+    res.status(500).json({ error: 'Error al completar la activación de la cuenta.' });
+  }
+}
+
+/**
+ * 8. toggleClientProfileStatusHandler
+ * Permite al administrador o propietario pausar o reactivar el perfil público de un cliente (/p/:slug)
+ * Actualiza en Firestore tanto status como active y profileStatus de forma atómica.
+ */
+export async function toggleClientProfileStatusHandler(req: Request, res: Response): Promise<void> {
+  const adminUser = await verifyAdminAuth(req);
+  if (!adminUser) {
+    res.status(403).json({ error: 'No tienes permisos administrativos para realizar esta operación.' });
+    return;
+  }
+
+  const { clientId, status } = req.body;
+  if (!clientId || !status || !['active', 'inactive', 'pending'].includes(status)) {
+    res.status(400).json({ error: 'Parámetros inválidos. clientId y status son requeridos.' });
+    return;
+  }
+
+  const { db, isConfigured } = getFirebaseAdmin();
+  const nowIso = new Date().toISOString();
+  const isActive = status === 'active';
+  const profileStatus = status === 'inactive' ? 'inactive' : 'active';
+
+  try {
+    if (isConfigured && db) {
+      const clientDoc = await db.collection('clients').doc(clientId).get();
+      if (!clientDoc.exists) {
+        res.status(404).json({ error: 'Cliente no encontrado.' });
+        return;
+      }
+
+      await db.collection('clients').doc(clientId).set({
+        status,
+        active: isActive,
+        profileStatus,
+        updatedAt: nowIso
+      }, { merge: true });
+    }
+
+    await logAuditEvent({
+      actorUid: adminUser.uid,
+      actorRole: adminUser.role,
+      action: status === 'inactive' ? 'CLIENT_PROFILE_PAUSED' : 'CLIENT_PROFILE_ACTIVATED',
+      targetClientId: clientId,
+      details: { newStatus: status, active: isActive, profileStatus }
+    });
+
+    res.status(200).json({
+      success: true,
+      clientId,
+      status,
+      active: isActive,
+      profileStatus,
+      message: status === 'inactive' 
+        ? 'Perfil pausado correctamente. Ya no estará visible públicamente.' 
+        : 'Perfil activado correctamente.'
+    });
+  } catch (err: any) {
+    console.error('[AdminAccess] Error en toggleClientProfileStatusHandler:', err);
+    res.status(500).json({ error: err.message || 'Error al cambiar estado del perfil.' });
+  }
+}
+

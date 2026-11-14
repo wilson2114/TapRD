@@ -1,4 +1,5 @@
-import { auth } from '../lib/firebase';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getCurrentAdminUser } from './authService';
 import { updateClient, getClientById } from './clientService';
 import { createActivationToken } from './activationService';
@@ -372,3 +373,159 @@ export async function reactivateClientAccess(clientId: string): Promise<ClientAc
     }
   }
 }
+
+/**
+ * 4. Reactivar o Activar el acceso de un cliente
+ */
+export const activateClientAccess = reactivateClientAccess;
+
+/**
+ * 5. Verificar el estado real de acceso de un cliente consultando Authentication y Firestore.
+ * Si el usuario ya completó su activación o tiene cuenta activa, auto-sincroniza en Firestore.
+ */
+export async function verifyClientAccessStatus(
+  clientId: string,
+  userId?: string,
+  email?: string
+): Promise<'none' | 'pending' | 'active' | 'suspended'> {
+  // 1. Intentar llamar al backend administrativo con ID Token
+  try {
+    const headers = await getAdminHeaders();
+    const response = await fetch('/api/admin/client-access/verify-status', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ clientId, userId, email })
+    });
+
+    const { isJson, data } = await parseSafeResponse(response);
+    if (isJson && data && data.success && data.accessStatus) {
+      return data.accessStatus;
+    }
+  } catch (err) {
+    console.warn('[clientAccessService] Aviso verificando estado por API, ejecutando comprobación directa:', err);
+  }
+
+  // 2. Comprobación directa en Firestore (Modo ADMIN directo)
+  if (isFirebaseConfigured && db) {
+    try {
+      const client = await getClientById(clientId);
+      if (client?.accessStatus === 'suspended') {
+        return 'suspended';
+      }
+
+      let targetUid = userId || client?.userId;
+      const cleanEmail = (email || client?.clientEmail || client?.email || '').trim().toLowerCase();
+
+      // Consultar colección users/{uid} si existe targetUid
+      if (targetUid) {
+        const userSnap = await getDoc(doc(db, 'users', targetUid));
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          if (uData.active === false) {
+            return 'suspended';
+          }
+          if (uData.role === 'CLIENT' || uData.role === 'client' || uData.clientId === clientId) {
+            // Cuenta activa verificada
+            if (client && client.accessStatus !== 'active') {
+              try {
+                await updateClient(clientId, { accessStatus: 'active' });
+              } catch {}
+            }
+            return 'active';
+          }
+        }
+      }
+
+      // Si no se encontró por targetUid, buscar en users por email o por clientId
+      if (cleanEmail) {
+        try {
+          const { collection, query, where, getDocs } = await import('firebase/firestore');
+          const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const uData = snap.docs[0].data();
+            if (uData.active === false) {
+              return 'suspended';
+            }
+            if (client && client.accessStatus !== 'active') {
+              try {
+                await updateClient(clientId, { accessStatus: 'active', userId: snap.docs[0].id });
+              } catch {}
+            }
+            return 'active';
+          }
+        } catch {}
+      }
+
+      // Buscar en users por clientId
+      try {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const qClient = query(collection(db, 'users'), where('clientId', '==', clientId));
+        const snapClient = await getDocs(qClient);
+        if (!snapClient.empty) {
+          const uData = snapClient.docs[0].data();
+          if (uData.active === false) {
+            return 'suspended';
+          }
+          if (client && client.accessStatus !== 'active') {
+            try {
+              await updateClient(clientId, { accessStatus: 'active', userId: snapClient.docs[0].id });
+            } catch {}
+          }
+          return 'active';
+        }
+      } catch {}
+
+      // Si tiene token de activación pendiente
+      if (client?.activationToken || client?.accessStatus === 'pending') {
+        return 'pending';
+      }
+
+      if (client?.accessStatus === 'active') {
+        return 'active';
+      }
+    } catch (directErr) {
+      console.warn('[clientAccessService] Error en verificación directa:', directErr);
+    }
+  }
+
+  return 'none';
+}
+
+/**
+ * 6. Verificar en lote el estado real de accesos para múltiples clientes
+ */
+export async function batchVerifyClientAccessStatuses(
+  clients: Array<{ id: string; userId?: string; email?: string; clientEmail?: string; accessStatus?: string }>
+): Promise<Record<string, 'none' | 'pending' | 'active' | 'suspended'>> {
+  if (!clients || clients.length === 0) return {};
+
+  try {
+    const headers = await getAdminHeaders();
+    const response = await fetch('/api/admin/client-access/batch-verify-status', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ clients })
+    });
+
+    const { isJson, data } = await parseSafeResponse(response);
+    if (isJson && data && data.success && data.statuses) {
+      return data.statuses;
+    }
+  } catch (err) {
+    console.warn('[clientAccessService] Aviso en batch-verify por API:', err);
+  }
+
+  // Fallback directo individual
+  const results: Record<string, 'none' | 'pending' | 'active' | 'suspended'> = {};
+  for (const c of clients) {
+    try {
+      const verified = await verifyClientAccessStatus(c.id, c.userId, c.clientEmail || c.email);
+      results[c.id] = verified;
+    } catch {
+      results[c.id] = (c.accessStatus as any) || (c.userId ? 'active' : 'none');
+    }
+  }
+  return results;
+}
+

@@ -85,8 +85,8 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
     showToast(`¡Contacto de ${client.businessName} descargado!`);
   };
 
-  // ESTADO INACTIVO (REGLA 15: Si está desactivado, mostrar mensaje claro)
-  if (client.status === 'inactive') {
+  // ESTADO INACTIVO (REGLA 15: Si está desactivado o pausado, mostrar mensaje claro)
+  if (client.status === 'inactive' || client.profileStatus === 'inactive' || client.active === false) {
     return (
       <div className={`${isProfileDark ? 'dark' : ''} min-h-screen w-full flex flex-col items-center`}>
         <div className="min-h-screen w-full bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center p-4 text-center transition-colors">

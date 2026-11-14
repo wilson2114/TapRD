@@ -50,7 +50,17 @@ export function getFirebaseAdmin() {
     const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     if (serviceAccountEnv) {
       try {
-        const serviceAccount = JSON.parse(serviceAccountEnv);
+        let serviceAccount: any;
+        try {
+          serviceAccount = JSON.parse(serviceAccountEnv);
+        } catch {
+          // Si el valor en la variable de entorno viene sin el contenedor exterior
+          const wrapped = serviceAccountEnv.trim().startsWith('{')
+            ? serviceAccountEnv
+            : `{ "private_key": ${serviceAccountEnv} "project_id": "taprd-16064" }`;
+          serviceAccount = JSON.parse(wrapped);
+        }
+
         adminApp = initializeApp({
           credential: cert(serviceAccount),
           projectId: serviceAccount.project_id || 'taprd-16064'

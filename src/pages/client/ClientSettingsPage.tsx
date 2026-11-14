@@ -17,7 +17,9 @@ import {
   HelpCircle,
   Clock,
   Layers,
-  Info
+  Info,
+  Power,
+  Loader2
 } from 'lucide-react';
 import { isSubscriptionActive, isGracePeriodActive } from '../../services/subscriptionService';
 import { canUseFeature } from '../../services/featureAccessService';
@@ -45,6 +47,8 @@ export function ClientSettingsPage({ onNavigate }: ClientSettingsPageProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isTogglingProfileStatus, setIsTogglingProfileStatus] = useState(false);
+  const [profileStatusFeedback, setProfileStatusFeedback] = useState<string | null>(null);
 
   if (!client) return null;
 
@@ -58,6 +62,31 @@ export function ClientSettingsPage({ onNavigate }: ClientSettingsPageProps) {
       ...prev,
       [key]: !prev[key]
     }));
+  };
+
+  const handleToggleProfileStatus = async () => {
+    setIsTogglingProfileStatus(true);
+    setProfileStatusFeedback(null);
+    const newStatus = client.status === 'active' ? 'inactive' : 'active';
+    try {
+      const updated = await updateClient({
+        status: newStatus,
+        active: newStatus === 'active',
+        profileStatus: newStatus === 'inactive' ? 'inactive' : 'active'
+      });
+      if (updated) {
+        setProfileStatusFeedback(
+          newStatus === 'inactive'
+            ? 'Tu perfil público ha sido pausado. Los visitantes verán un aviso de mantenimiento temporal.'
+            : '¡Tu perfil público ha sido reactivado y vuelve a estar visible en línea!'
+        );
+        setTimeout(() => setProfileStatusFeedback(null), 5000);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error al cambiar estado del perfil');
+    } finally {
+      setIsTogglingProfileStatus(false);
+    }
   };
 
   const handleSaveSettings = async () => {
@@ -270,7 +299,70 @@ export function ClientSettingsPage({ onNavigate }: ClientSettingsPageProps) {
         </div>
 
         {/* ================================================================= */}
-        {/* SECCIÓN 2: PREFERENCIAS DE VISIBILIDAD DE PERFIL */}
+        {/* SECCIÓN 2: CONTROL DE ESTADO DEL PERFIL (ACTIVO / PAUSADO) */}
+        {/* ================================================================= */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Power className={`w-4 h-4 ${client.status === 'active' ? 'text-emerald-600' : 'text-amber-600'}`} />
+                <span>Estado de Publicación de tu Perfil</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Controla la disponibilidad pública de tu enlace NFC (/p/{client.slug || 'negocio'})
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider ${
+                client.status === 'active'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+              }`}>
+                {client.status === 'active' ? 'Perfil Activo' : 'Perfil Pausado'}
+              </span>
+
+              <button
+                type="button"
+                disabled={isTogglingProfileStatus}
+                onClick={handleToggleProfileStatus}
+                className={`py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50 ${
+                  client.status === 'active'
+                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+              >
+                {isTogglingProfileStatus ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Power className="w-3.5 h-3.5" />
+                )}
+                <span>{client.status === 'active' ? 'Pausar perfil' : 'Activar perfil'}</span>
+              </button>
+            </div>
+          </div>
+
+          {profileStatusFeedback && (
+            <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{profileStatusFeedback}</span>
+            </div>
+          )}
+
+          <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed space-y-1.5 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <p className="font-semibold text-slate-700 dark:text-slate-300">
+              ¿Qué ocurre al pausar tu perfil?
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
+              <li>Los visitantes que escaneen tu tarjeta NFC o abran tu enlace verán un aviso de mantenimiento temporal.</li>
+              <li>Tus catálogos, fotos, redes y cuentas bancarias quedan 100% seguros y guardados en tu cuenta.</li>
+              <li>Puedes volver a activar tu perfil con un solo clic cuando lo desees sin alterar ningún enlace.</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* ================================================================= */}
+        {/* SECCIÓN 3: PREFERENCIAS DE VISIBILIDAD DE PERFIL */}
         {/* ================================================================= */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4">

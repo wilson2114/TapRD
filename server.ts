@@ -6,7 +6,11 @@ import {
   createClientAccessHandler,
   resendClientInvitationHandler,
   suspendClientAccessHandler,
-  reactivateClientAccessHandler
+  reactivateClientAccessHandler,
+  verifyClientAccessStatusHandler,
+  batchVerifyClientAccessStatusesHandler,
+  completeActivationHandler,
+  toggleClientProfileStatusHandler
 } from './server/clientAccessController';
 
 async function startServer() {
@@ -64,6 +68,13 @@ async function startServer() {
   app.post('/api/admin/client-access/resend', resendClientInvitationHandler);
   app.post('/api/admin/client-access/suspend', suspendClientAccessHandler);
   app.post('/api/admin/client-access/reactivate', reactivateClientAccessHandler);
+  app.post('/api/admin/client-access/activate', reactivateClientAccessHandler);
+  app.post('/api/admin/client-access/verify-status', verifyClientAccessStatusHandler);
+  app.post('/api/admin/client-access/batch-verify-status', batchVerifyClientAccessStatusesHandler);
+  app.post('/api/admin/clients/toggle-status', toggleClientProfileStatusHandler);
+
+  // Endpoint de activación segura de clientes
+  app.post('/api/client/complete-activation', completeActivationHandler);
 
   // Garantía: Si alguna ruta /api/* no coincide, devolver siempre JSON y nunca HTML
   app.all('/api/*', (req, res) => {

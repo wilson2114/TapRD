@@ -3,6 +3,8 @@ import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
 import { uploadClientLogo, deleteClientLogo, validateLogoFile } from '../../services/storageService';
 import { ClientProfile } from '../../components/ClientProfile';
+import { CITIES } from '../../data/dominicanCities';
+import { CitySelector } from '../../components/CitySelector';
 import { 
   Save, 
   Eye, 
@@ -42,20 +44,6 @@ const CATEGORIES = [
   'Servicios Profesionales',
   'Comercio / Tienda',
   'Otro'
-];
-
-const CITIES = [
-  'Santo Domingo',
-  'Santiago de los Caballeros',
-  'La Romana',
-  'Punta Cana / Bávaro',
-  'Puerto Plata',
-  'San Cristóbal',
-  'San Pedro de Macorís',
-  'Higüey',
-  'La Vega',
-  'Bonao',
-  'Las Terrenas / Samaná'
 ];
 
 export function ClientProfilePage({ onNavigate }: ClientProfilePageProps) {
@@ -136,7 +124,7 @@ export function ClientProfilePage({ onNavigate }: ClientProfilePageProps) {
   };
 
   const handleRemoveLogo = async () => {
-    if (logo && window.confirm('¿Deseas eliminar este logo?')) {
+    if (logo) {
       try {
         await deleteClientLogo(logo);
       } catch {}
@@ -367,16 +355,14 @@ export function ClientProfilePage({ onNavigate }: ClientProfilePageProps) {
             </div>
 
             <div className="space-y-1 text-left">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Ciudad</label>
-              <select
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Ciudad o Pueblo (República Dominicana)
+              </label>
+              <CitySelector
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium"
-              >
-                {CITIES.map((ci) => (
-                  <option key={ci} value={ci}>{ci}</option>
-                ))}
-              </select>
+                onChange={setCity}
+                buttonClassName="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:border-blue-500 transition-all font-medium flex items-center justify-between gap-2 text-left cursor-pointer"
+              />
             </div>
 
             <div className="sm:col-span-2 space-y-1 text-left">

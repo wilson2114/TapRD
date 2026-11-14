@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, MessageCircle, Send, Sparkles, Building, User, Phone, Mail, MapPin, Layers, HelpCircle } from 'lucide-react';
+import { X, CheckCircle2, MessageCircle, Send, Sparkles, Building, User, Phone, Mail, Layers, HelpCircle } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { createProductWhatsAppUrl } from '../config/constants';
+import { CitySelector } from './CitySelector';
 
 interface ProductRequestModalProps {
   isOpen: boolean;
@@ -280,24 +281,11 @@ export function ProductRequestModal({
                   <label className="block text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                     Ciudad (República Dominicana) *
                   </label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                    <select
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="w-full min-h-[44px] pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all cursor-pointer"
-                    >
-                      <option value="Santo Domingo">Santo Domingo (D.N. / Este / Oeste / Norte)</option>
-                      <option value="Santiago de los Caballeros">Santiago de los Caballeros</option>
-                      <option value="Punta Cana / Bávaro">Punta Cana / Bávaro / La Altagracia</option>
-                      <option value="La Romana">La Romana</option>
-                      <option value="Puerto Plata">Puerto Plata</option>
-                      <option value="San Francisco de Macorís">San Francisco de Macorís</option>
-                      <option value="La Vega">La Vega</option>
-                      <option value="San Cristóbal">San Cristóbal</option>
-                      <option value="Otra provincia">Otra provincia de RD</option>
-                    </select>
-                  </div>
+                  <CitySelector
+                    value={city}
+                    onChange={setCity}
+                    buttonClassName="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all flex items-center justify-between gap-2 text-left cursor-pointer"
+                  />
                 </div>
 
                 <div>
