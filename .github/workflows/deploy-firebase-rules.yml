@@ -32,10 +32,15 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
 
-      - name: Deploy Firestore and Storage Rules
+      - name: Deploy Firestore Rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
-        run: npx --yes firebase-tools deploy --only firestore:rules,storage --project taprd-16064 --non-interactive
+        run: npx --yes firebase-tools deploy --only firestore:rules --project taprd-16064 --non-interactive
+
+      - name: Deploy Storage Rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
+        run: npx --yes firebase-tools deploy --only storage --project taprd-16064 --non-interactive
 
       - name: Cleanup credentials
         if: always()
