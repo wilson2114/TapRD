@@ -96,8 +96,8 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
   const [manualSlugEdit, setManualSlugEdit] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
-  const [phone, setPhone] = useState('+1 809-555-0100');
-  const [whatsapp, setWhatsapp] = useState('18095550100');
+  const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState(CITIES[0]);
   const [address, setAddress] = useState('');
@@ -126,17 +126,10 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
   );
 
   // Services
-  const [services, setServices] = useState<ClientService[]>([
-    {
-      id: 'srv-init-1',
-      name: 'Servicio Principal',
-      description: 'Atención personalizada y asesoría directa.',
-      price: 'RD$500'
-    }
-  ]);
+  const [services, setServices] = useState<ClientService[]>([]);
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceDesc, setNewServiceDesc] = useState('');
-  const [newServicePrice, setNewServicePrice] = useState('RD$');
+  const [newServicePrice, setNewServicePrice] = useState('');
 
   // Settings switches
   const [settings, setSettings] = useState<ClientSettings>({
