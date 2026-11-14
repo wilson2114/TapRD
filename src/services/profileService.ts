@@ -130,8 +130,8 @@ export function trackAnalyticsEvent(
     createdAt: new Date().toISOString()
   };
 
-  addDoc(collection(db, 'clients', clientId, 'analytics_events'), payload).catch(() => {
-    // Silencioso para no interrumpir la navegación del visitante
+  addDoc(collection(db, 'clients', clientId, 'analytics_events'), payload).catch((err) => {
+    console.warn('[Analytics] No se pudo registrar el evento en Firestore:', err?.code || err?.message || err);
   });
 }
 

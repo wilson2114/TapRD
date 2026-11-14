@@ -55,10 +55,10 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
     remoteStats?.totalViews ?? 0,
     localStats.totalTaps
   );
-  const whatsappClicks = remoteStats ? remoteStats.whatsappClicks : localStats.whatsappClicks;
-  const instagramClicks = remoteStats ? remoteStats.instagramClicks : localStats.instagramClicks;
-  const vcardDownloads = remoteStats ? remoteStats.vcardDownloads : localStats.vcardDownloads;
-  const callClicks = remoteStats ? remoteStats.phoneClicks : 0;
+  const whatsappClicks = Math.max(remoteStats?.whatsappClicks ?? 0, localStats.whatsappClicks);
+  const instagramClicks = Math.max(remoteStats?.instagramClicks ?? 0, localStats.instagramClicks);
+  const vcardDownloads = Math.max(remoteStats?.vcardDownloads ?? 0, localStats.vcardDownloads);
+  const callClicks = Math.max(remoteStats?.phoneClicks ?? 0, 0);
   const totalActionClicks = whatsappClicks + instagramClicks + callClicks;
   const whatsappRate = totalViews > 0 ? ((whatsappClicks / totalViews) * 100).toFixed(1) : '0.0';
   const whatsappPct = totalActionClicks > 0 ? Math.round((whatsappClicks / totalActionClicks) * 100) : 0;
