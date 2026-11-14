@@ -39,20 +39,20 @@ export function recordInteraction(profileSlug: string, type: InteractionType) {
 
 export function getProfileLocalStats(profileSlug: string, baseStats?: ProfileAnalytics): ProfileAnalytics {
   const fallback: ProfileAnalytics = baseStats || {
-    totalTaps: 120,
-    whatsappClicks: 45,
-    instagramClicks: 30,
-    vcardDownloads: 18,
-    reviewClicks: 12,
-    directionsClicks: 15,
+    totalTaps: 0,
+    whatsappClicks: 0,
+    instagramClicks: 0,
+    vcardDownloads: 0,
+    reviewClicks: 0,
+    directionsClicks: 0,
     weeklyTaps: [
-      { day: 'Lun', taps: 14 },
-      { day: 'Mar', taps: 22 },
-      { day: 'Mié', taps: 18 },
-      { day: 'Jue', taps: 25 },
-      { day: 'Vie', taps: 38 },
-      { day: 'Sáb', taps: 44 },
-      { day: 'Dom', taps: 12 }
+      { day: 'Lun', taps: 0 },
+      { day: 'Mar', taps: 0 },
+      { day: 'Mié', taps: 0 },
+      { day: 'Jue', taps: 0 },
+      { day: 'Vie', taps: 0 },
+      { day: 'Sáb', taps: 0 },
+      { day: 'Dom', taps: 0 }
     ]
   };
 

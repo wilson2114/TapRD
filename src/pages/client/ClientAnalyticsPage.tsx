@@ -3,6 +3,7 @@ import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
 import { canUseFeature, getFeatureLockReason } from '../../services/featureAccessService';
 import { getLimit } from '../../services/limitService';
+import { getProfileLocalStats } from '../../utils/analytics';
 import { 
   TrendingUp, 
   Eye, 
@@ -31,6 +32,18 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
 
   const hasAdvanced = canUseFeature(client, 'advancedAnalytics');
   const maxDays = getLimit(client, 'maxAnalyticsDays') ?? 30;
+
+  const localStats = getProfileLocalStats(client.slug);
+  const totalViews = (client.viewsCount ?? 0) + localStats.totalTaps;
+  const whatsappClicks = localStats.whatsappClicks;
+  const instagramClicks = localStats.instagramClicks;
+  const vcardDownloads = localStats.vcardDownloads;
+  const callClicks = 0;
+  const totalActionClicks = whatsappClicks + instagramClicks + callClicks;
+  const whatsappRate = totalViews > 0 ? ((whatsappClicks / totalViews) * 100).toFixed(1) : '0.0';
+  const whatsappPct = totalActionClicks > 0 ? Math.round((whatsappClicks / totalActionClicks) * 100) : 0;
+  const instagramPct = totalActionClicks > 0 ? Math.round((instagramClicks / totalActionClicks) * 100) : 0;
+  const callPct = totalActionClicks > 0 ? Math.round((callClicks / totalActionClicks) * 100) : 0;
 
   return (
     <ClientLayout
@@ -68,10 +81,10 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                 <Eye className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-3xl font-black text-slate-900 dark:text-white">1,248</p>
-            <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              <span>+18% en los últimos 30 días</span>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{totalViews.toLocaleString()}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-blue-600" />
+              <span>{totalViews > 0 ? 'Visitas registradas en tu perfil' : 'Sin visitas registradas aún'}</span>
             </p>
           </div>
 
@@ -82,10 +95,10 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                 <MessageSquare className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-3xl font-black text-slate-900 dark:text-white">482</p>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{whatsappClicks.toLocaleString()}</p>
             <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
-              <span>38.6% tasa de conversión</span>
+              <span>{whatsappRate}% tasa de conversión</span>
             </p>
           </div>
 
@@ -96,8 +109,10 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                 <Smartphone className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-3xl font-black text-slate-900 dark:text-white">194</p>
-            <p className="text-[11px] text-slate-400 font-medium">Clientes agregaron tu número</p>
+            <p className="text-3xl font-black text-slate-900 dark:text-white">{vcardDownloads.toLocaleString()}</p>
+            <p className="text-[11px] text-slate-400 font-medium">
+              {vcardDownloads > 0 ? 'Clientes agregaron tu número' : 'Sin descargas registradas aún'}
+            </p>
           </div>
         </div>
 
@@ -179,26 +194,26 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between items-center">
                       <span className="font-bold">WhatsApp Directo</span>
-                      <span className="font-mono font-black text-blue-600">482 (65%)</span>
+                      <span className="font-mono font-black text-blue-600">{whatsappClicks} ({whatsappPct}%)</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div className="h-full bg-blue-600 rounded-full" style={{ width: '65%' }} />
+                      <div className="h-full bg-blue-600 rounded-full" style={{ width: `${whatsappPct}%` }} />
                     </div>
 
                     <div className="flex justify-between items-center pt-1">
                       <span className="font-bold">Instagram</span>
-                      <span className="font-mono font-black text-pink-600">182 (24%)</span>
+                      <span className="font-mono font-black text-pink-600">{instagramClicks} ({instagramPct}%)</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div className="h-full bg-pink-600 rounded-full" style={{ width: '24%' }} />
+                      <div className="h-full bg-pink-600 rounded-full" style={{ width: `${instagramPct}%` }} />
                     </div>
 
                     <div className="flex justify-between items-center pt-1">
                       <span className="font-bold">Llamada Telefónica</span>
-                      <span className="font-mono font-black text-emerald-600">81 (11%)</span>
+                      <span className="font-mono font-black text-emerald-600">{callClicks} ({callPct}%)</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div className="h-full bg-emerald-600 rounded-full" style={{ width: '11%' }} />
+                      <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${callPct}%` }} />
                     </div>
                   </div>
                 </div>
@@ -211,11 +226,11 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                       <span className="font-bold">Apple iPhone (iOS NFC)</span>
-                      <span className="font-black text-slate-900 dark:text-white">68%</span>
+                      <span className="font-black text-slate-900 dark:text-white">0%</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                       <span className="font-bold">Android (Samsung, Xiaomi, etc.)</span>
-                      <span className="font-black text-slate-900 dark:text-white">32%</span>
+                      <span className="font-black text-slate-900 dark:text-white">0%</span>
                     </div>
                   </div>
                 </div>
