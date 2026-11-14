@@ -495,12 +495,13 @@ export async function updateClient(
       const fullDoc = cleanForFirestore(updatedClient);
       await setDoc(docRef, fullDoc, { merge: true });
     } catch (err: any) {
-      console.warn(`Aviso actualizando cliente ${id} en Firestore (datos respaldados en caché local):`, err);
+      console.error(`Error actualizando cliente ${id} en Firestore:`, err);
       const isPermError = err?.code === 'permission-denied' || 
                           (err?.message && err.message.toLowerCase().includes('permission'));
-      if (!isPermError) {
-        throw new Error(err.message || 'No se pudo actualizar el cliente en Firestore.');
+      if (isPermError) {
+        throw new Error('Permiso denegado en Firestore al guardar los cambios. Verifica tu sesión e intenta de nuevo.');
       }
+      throw new Error(err.message || 'No se pudo actualizar el cliente en Firestore.');
     }
   }
 
@@ -711,15 +712,58 @@ export async function updateClientByOwner(
   // Asegurar fecha de actualización
   safeUpdates.updatedAt = new Date().toISOString();
 
-  const result = await updateClient(id, safeUpdates);
+  // Resolver cliente actual en memoria o Firestore para mantener estado local sincronizado
+  const index = inMemoryClients.findIndex(c => c.id === id);
+  const current = index !== -1 ? inMemoryClients[index] : await getClientById(id);
 
-  // Sincronizar con la sesión local del cliente si existe
-  if (result && typeof window !== 'undefined') {
+  if (!current) {
+    throw new Error('Cliente no encontrado.');
+  }
+
+  if (isFirebaseConfigured && typeof (auth as any).authStateReady === 'function') {
     try {
-      localStorage.setItem('taprd_client_session', JSON.stringify(result));
+      await (auth as any).authStateReady();
     } catch {}
   }
 
-  return result;
+  // Persistir únicamente los campos permitidos en Firestore para no tocar campos protegidos
+  if (isFirebaseConfigured) {
+    try {
+      const docRef = doc(db, COLLECTION_NAME, id);
+      const cleanedUpdates = cleanForFirestore(safeUpdates);
+      await updateDoc(docRef, cleanedUpdates as Record<string, any>);
+    } catch (err: any) {
+      console.error(`Error actualizando cliente ${id} (propietario) en Firestore:`, err);
+      const isPermError = err?.code === 'permission-denied' ||
+                          (err?.message && err.message.toLowerCase().includes('permission'));
+      if (isPermError) {
+        throw new Error('Permiso denegado en Firestore al guardar los cambios. Verifica tu sesión e intenta de nuevo.');
+      }
+      throw new Error(err.message || 'No se pudo actualizar el cliente en Firestore.');
+    }
+  }
+
+  const updatedClient: Client = {
+    ...current,
+    ...safeUpdates,
+    id: current.id,
+    createdAt: current.createdAt
+  };
+
+  if (index !== -1) {
+    inMemoryClients[index] = updatedClient;
+  } else {
+    inMemoryClients = [updatedClient, ...inMemoryClients];
+  }
+  saveLocalCache([...inMemoryClients]);
+
+  // Sincronizar con la sesión local del cliente si existe
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('taprd_client_session', JSON.stringify(updatedClient));
+    } catch {}
+  }
+
+  return updatedClient;
 }
 

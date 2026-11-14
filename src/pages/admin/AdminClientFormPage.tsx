@@ -1734,6 +1734,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                 type="text"
                 value={newServiceName}
                 onChange={(e) => setNewServiceName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddService(); } }}
                 placeholder="Nombre del servicio (ej. Corte clásico)"
                 className="py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-hidden focus:border-blue-500"
               />
@@ -1741,6 +1742,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                 type="text"
                 value={newServiceDesc}
                 onChange={(e) => setNewServiceDesc(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddService(); } }}
                 placeholder="Descripción corta"
                 className="py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-hidden focus:border-blue-500"
               />
@@ -1749,6 +1751,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
                   type="text"
                   value={newServicePrice}
                   onChange={(e) => setNewServicePrice(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddService(); } }}
                   placeholder="Precio (RD$500)"
                   className="w-28 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-hidden focus:border-blue-500"
                 />

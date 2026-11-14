@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
 import { ClientService } from '../../types/client';
@@ -32,18 +32,29 @@ interface ClientServicesPageProps {
   onNavigate: (path: string) => void;
 }
 
+function normalizeServicesList(list: ClientService[] = []): ClientService[] {
+  return list.map((s, index) => ({
+    ...s,
+    currency: s.currency || 'DOP',
+    active: s.active !== false,
+    order: s.order ?? index + 1
+  }));
+}
+
 export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
   const { client, updateClient } = useClientAuth();
+  const syncedClientIdRef = useRef<string | null>(client?.id || null);
 
-  const [services, setServices] = useState<ClientService[]>(() => {
-    const list = client?.services || [];
-    return list.map((s, index) => ({
-      ...s,
-      currency: s.currency || 'DOP',
-      active: s.active !== false,
-      order: s.order ?? index + 1
-    }));
-  });
+  const [services, setServices] = useState<ClientService[]>(() =>
+    normalizeServicesList(client?.services || [])
+  );
+
+  useEffect(() => {
+    if (client && client.id !== syncedClientIdRef.current) {
+      syncedClientIdRef.current = client.id;
+      setServices(normalizeServicesList(client.services || []));
+    }
+  }, [client]);
 
   // =========================================================================
   // ESTADOS PARA AGREGAR NUEVO SERVICIO
@@ -258,11 +269,57 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
   };
 
   // =========================================================================
+  // PERSISTENCIA INMEDIATA EN BASE DE DATOS
+  // =========================================================================
+  const persistServices = async (
+    nextServices: ClientService[],
+    previousServices: ClientService[]
+  ): Promise<boolean> => {
+    setErrorMessage(null);
+    setSaveSuccess(false);
+    setIsSaving(true);
+
+    try {
+      const sanitizedServices = nextServices.map((s, idx) => ({
+        ...s,
+        order: idx + 1,
+        active: s.active !== false
+      }));
+
+      const updated = await updateClient({
+        services: sanitizedServices
+      });
+
+      if (updated) {
+        setServices(normalizeServicesList(updated.services || sanitizedServices));
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 4000);
+        return true;
+      } else {
+        setServices(previousServices);
+        setErrorMessage('No se pudieron guardar los servicios en la base de datos.');
+        return false;
+      }
+    } catch (err: any) {
+      setServices(previousServices);
+      setErrorMessage(err.message || 'Error guardando en la base de datos.');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // =========================================================================
   // CREACIÓN DE UN SERVICIO
   // =========================================================================
-  const handleAddService = (e: React.FormEvent) => {
+  const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newServiceName.trim()) return;
+    setErrorMessage(null);
+
+    if (!newServiceName.trim()) {
+      setErrorMessage('Ingresa el nombre del servicio.');
+      return;
+    }
 
     if (!canAddMore) {
       setErrorMessage(`Has alcanzado el límite de ${maxServices} servicios de tu plan.`);
@@ -274,6 +331,7 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
       return;
     }
 
+    const previousServices = services;
     const nextOrder = services.length + 1;
 
     const newService: ClientService = {
@@ -291,9 +349,13 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
       order: nextOrder
     };
 
-    setServices([...services, newService]);
+    const nextServices = [...services, newService];
+    setServices(nextServices);
 
-    // Limpiar formulario
+    const saved = await persistServices(nextServices, previousServices);
+    if (!saved) return;
+
+    // Limpiar formulario solo cuando se guardó correctamente
     setNewServiceName('');
     setNewServiceDesc('');
     setNewServicePrice('RD$');
@@ -312,10 +374,7 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
   // ELIMINACIÓN DE UN SERVICIO
   // =========================================================================
   const handleDeleteService = async (service: ClientService) => {
-    if (service.imagePath || service.thumbnailUrl) {
-      deleteServiceImage(service.imagePath, service.thumbnailUrl);
-    }
-
+    const previousServices = services;
     const updated = services
       .filter(s => s.id !== service.id)
       .map((s, idx) => ({ ...s, order: idx + 1 }));
@@ -324,6 +383,11 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
 
     if (editingServiceId === service.id) {
       setEditingServiceId(null);
+    }
+
+    const saved = await persistServices(updated, previousServices);
+    if (saved && (service.imagePath || service.thumbnailUrl)) {
+      deleteServiceImage(service.imagePath, service.thumbnailUrl);
     }
   };
 
@@ -346,7 +410,7 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
     setEditImageStatusText(service.imageUrl ? 'Fotografía aprobada actualmente activa' : null);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingServiceId) return;
 
     if (editImageUploading) {
@@ -354,7 +418,8 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
       return;
     }
 
-    setServices(services.map(s => {
+    const previousServices = services;
+    const nextServices: ClientService[] = services.map(s => {
       if (s.id === editingServiceId) {
         return {
           ...s,
@@ -371,75 +436,62 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
         };
       }
       return s;
-    }));
+    });
 
-    setEditingServiceId(null);
+    setServices(nextServices);
+    const saved = await persistServices(nextServices, previousServices);
+    if (saved) {
+      setEditingServiceId(null);
+    }
   };
 
   // =========================================================================
   // REORDENAMIENTO DE SERVICIOS
   // =========================================================================
-  const handleMoveUp = (index: number) => {
+  const handleMoveUp = async (index: number) => {
     if (index === 0) return;
+    const previousServices = services;
     const newArr = [...services];
     const temp = newArr[index - 1];
     newArr[index - 1] = newArr[index];
     newArr[index] = temp;
-    // Recalcular orden secuencial
-    setServices(newArr.map((s, idx) => ({ ...s, order: idx + 1 })));
+    const reordered = newArr.map((s, idx) => ({ ...s, order: idx + 1 }));
+    setServices(reordered);
+    await persistServices(reordered, previousServices);
   };
 
-  const handleMoveDown = (index: number) => {
+  const handleMoveDown = async (index: number) => {
     if (index === services.length - 1) return;
+    const previousServices = services;
     const newArr = [...services];
     const temp = newArr[index + 1];
     newArr[index + 1] = newArr[index];
     newArr[index] = temp;
-    setServices(newArr.map((s, idx) => ({ ...s, order: idx + 1 })));
+    const reordered = newArr.map((s, idx) => ({ ...s, order: idx + 1 }));
+    setServices(reordered);
+    await persistServices(reordered, previousServices);
   };
 
   // =========================================================================
   // ACTIVAR / DESACTIVAR SERVICIO (TOGGLE RÁPIDO)
   // =========================================================================
-  const handleToggleActive = (serviceId: string) => {
-    setServices(services.map(s => {
+  const handleToggleActive = async (serviceId: string) => {
+    const previousServices = services;
+    const nextServices = services.map(s => {
       if (s.id === serviceId) {
         return { ...s, active: !s.active };
       }
       return s;
-    }));
+    });
+    setServices(nextServices);
+    await persistServices(nextServices, previousServices);
   };
 
   // =========================================================================
   // GUARDAR EN BASE DE DATOS
   // =========================================================================
   const handleSaveAll = async () => {
-    setErrorMessage(null);
-    setSaveSuccess(false);
-    setIsSaving(true);
-
-    try {
-      const sanitizedServices = services.map((s, idx) => ({
-        ...s,
-        order: idx + 1,
-        active: s.active !== false
-      }));
-
-      const updated = await updateClient({
-        services: sanitizedServices
-      });
-
-      if (updated) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 4000);
-      } else {
-        setErrorMessage('No se pudieron guardar los servicios en la base de datos.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error guardando en la base de datos.');
-    } finally {
-      setIsSaving(false);
-    }
+    await persistServices(services, services);
   };
 
   return (
@@ -715,11 +767,15 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
               <div className="flex justify-end pt-1">
                 <button
                   type="submit"
-                  disabled={newServiceImageUploading}
+                  disabled={newServiceImageUploading || isSaving}
                   className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.98] text-white text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <Plus className="w-4 h-4 text-cyan-400" />
-                  <span>Añadir a la lista de servicios</span>
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4 text-cyan-400" />
+                  )}
+                  <span>{isSaving ? 'Guardando servicio...' : 'Añadir a la lista de servicios'}</span>
                 </button>
               </div>
             </form>
