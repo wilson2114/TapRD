@@ -2,7 +2,7 @@ import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getCurrentAdminUser } from './authService';
 import { updateClient, getClientById } from './clientService';
-import { createActivationToken } from './activationService';
+import { createActivationToken, registerActivationToken, extractActivationParams } from './activationService';
 
 export interface CreateClientAccessResult {
   success: boolean;
@@ -96,6 +96,10 @@ export async function createClientAccess(
 
     if (isJson && data) {
       if (!response.ok) {
+        if (response.status >= 500 || data.code === 'ADMIN_SDK_UNAVAILABLE') {
+          console.info('[clientAccessService] Backend Admin SDK no disponible, aplicando fallback directo...');
+          return await fallbackCreateClientAccess(clientId, cleanEmail, ownerName);
+        }
         return {
           success: false,
           message: data.error || 'No se pudo crear el acceso para el cliente.',
@@ -103,13 +107,15 @@ export async function createClientAccess(
         };
       }
 
-      // Asegurar que el token de activación esté SIEMPRE registrado en Firestore y sea verificable
-      const act = await createActivationToken(
-        data.clientId || clientId,
-        cleanEmail,
-        ownerName || 'Cliente TapRD',
-        ownerName
-      );
+      const client = await getClientById(data.clientId || clientId);
+      const businessName = client?.businessName || ownerName || 'Cliente TapRD';
+      const serverToken =
+        data.activationToken ||
+        (data.activationLink ? extractActivationParams(data.activationLink).token : undefined);
+
+      const act = serverToken
+        ? await registerActivationToken(serverToken, data.clientId || clientId, cleanEmail, businessName, ownerName)
+        : await createActivationToken(data.clientId || clientId, cleanEmail, businessName, ownerName);
 
       const targetUid = data.userId || `client_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -218,13 +224,13 @@ export async function resendClientInvitation(clientId: string): Promise<ClientAc
       });
     } catch {}
 
-    // Intentar también notificar al backend si está disponible
+    // Notificar al backend pasando el mismo token para mantener consistencia
     try {
       const headers = await getAdminHeaders();
       await fetch('/api/admin/client-access/resend', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ clientId })
+        body: JSON.stringify({ clientId, token })
       });
     } catch {}
 
@@ -413,20 +419,34 @@ export async function verifyClientAccessStatus(
         return 'suspended';
       }
 
+      // Si tiene un token de activación pendiente sin consumir y no ha aceptado términos, mantener 'pending'
+      if (client?.activationToken && client?.accessStatus === 'pending' && !client?.termsAccepted) {
+        try {
+          const actSnap = await getDoc(doc(db, 'activations', client.activationToken));
+          if (!actSnap.exists() || actSnap.data()?.used === false) {
+            return 'pending';
+          }
+        } catch {
+          return 'pending';
+        }
+      }
+
+      if (client?.accessStatus === 'active') {
+        return 'active';
+      }
+
       let targetUid = userId || client?.userId;
       const cleanEmail = (email || client?.clientEmail || client?.email || '').trim().toLowerCase();
 
-      // Consultar colección users/{uid} si existe targetUid
-      if (targetUid) {
+      if (targetUid && !String(targetUid).startsWith('client_')) {
         const userSnap = await getDoc(doc(db, 'users', targetUid));
         if (userSnap.exists()) {
           const uData = userSnap.data();
           if (uData.active === false) {
             return 'suspended';
           }
-          if (uData.role === 'CLIENT' || uData.role === 'client' || uData.clientId === clientId) {
-            // Cuenta activa verificada
-            if (client && client.accessStatus !== 'active') {
+          if ((uData.role === 'CLIENT' || uData.role === 'client' || uData.clientId === clientId) && (uData.termsAccepted || client?.termsAccepted)) {
+            if (client) {
               try {
                 await updateClient(clientId, { accessStatus: 'active' });
               } catch {}
@@ -436,8 +456,7 @@ export async function verifyClientAccessStatus(
         }
       }
 
-      // Si no se encontró por targetUid, buscar en users por email o por clientId
-      if (cleanEmail) {
+      if (cleanEmail && client?.termsAccepted) {
         try {
           const { collection, query, where, getDocs } = await import('firebase/firestore');
           const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
@@ -447,7 +466,7 @@ export async function verifyClientAccessStatus(
             if (uData.active === false) {
               return 'suspended';
             }
-            if (client && client.accessStatus !== 'active') {
+            if (client) {
               try {
                 await updateClient(clientId, { accessStatus: 'active', userId: snap.docs[0].id });
               } catch {}
@@ -457,32 +476,8 @@ export async function verifyClientAccessStatus(
         } catch {}
       }
 
-      // Buscar en users por clientId
-      try {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        const qClient = query(collection(db, 'users'), where('clientId', '==', clientId));
-        const snapClient = await getDocs(qClient);
-        if (!snapClient.empty) {
-          const uData = snapClient.docs[0].data();
-          if (uData.active === false) {
-            return 'suspended';
-          }
-          if (client && client.accessStatus !== 'active') {
-            try {
-              await updateClient(clientId, { accessStatus: 'active', userId: snapClient.docs[0].id });
-            } catch {}
-          }
-          return 'active';
-        }
-      } catch {}
-
-      // Si tiene token de activación pendiente
       if (client?.activationToken || client?.accessStatus === 'pending') {
         return 'pending';
-      }
-
-      if (client?.accessStatus === 'active') {
-        return 'active';
       }
     } catch (directErr) {
       console.warn('[clientAccessService] Error en verificación directa:', directErr);

@@ -33,6 +33,22 @@ const authSubscribers: Set<AuthStateCallback> = new Set();
 
 let cachedCurrentUser: AppUser | null = null;
 let isAuthListenerInitialized = false;
+let isActivationInProgress = false;
+
+export function setActivationInProgress(inProgress: boolean): void {
+  isActivationInProgress = inProgress;
+}
+
+export function syncClientSession(appUser: AppUser, clientData?: Client | null): void {
+  cachedCurrentUser = appUser;
+  if (typeof window !== 'undefined') {
+    if (clientData) {
+      localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(clientData));
+    }
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(appUser));
+  }
+  notifySubscribers(appUser);
+}
 
 export const AUTHORIZED_ADMIN_EMAILS = [
   'wilsonabelinobrito@gmail.com',
@@ -55,6 +71,9 @@ export function initAuthObserver(): void {
 
   try {
     firebaseOnAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+      if (isActivationInProgress) {
+        return;
+      }
       if (fbUser) {
         try {
           const userRef = doc(db, 'users', fbUser.uid);

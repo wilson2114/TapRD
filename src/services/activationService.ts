@@ -1,23 +1,25 @@
 import { db, auth, isFirebaseConfigured } from '../lib/firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  updateDoc 
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  updateDoc
 } from 'firebase/firestore';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  updatePassword,
-  sendPasswordResetEmail 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { Client } from '../types/client';
 import { AppUser } from '../types/user';
 import { COMPANY_CONFIG } from '../config/company';
+import { setActivationInProgress, syncClientSession } from './authService';
 
 export interface ActivationRecord {
   id?: string;
@@ -71,6 +73,50 @@ function saveLocalActivation(record: ActivationRecord): void {
 }
 
 /**
+ * Extrae token, oobCode y email de forma tolerante desde una URL completa,
+ * una cadena de query o un token pegado manualmente por el cliente.
+ */
+export function extractActivationParams(input: string): {
+  token?: string;
+  oobCode?: string;
+  email?: string;
+} {
+  const cleaned = (input || '')
+    .trim()
+    .replace(/&amp;/g, '&')
+    .replace(/[>"')\].,;]+$/, '');
+
+  if (!cleaned) return {};
+
+  // Si parece una URL o ruta con parámetros
+  if (cleaned.includes('?') || cleaned.includes('token=') || cleaned.includes('oobCode=')) {
+    try {
+      const queryPart = cleaned.includes('?') ? cleaned.split('?')[1].split('#')[0] : cleaned;
+      const params = new URLSearchParams(queryPart);
+      const token = params.get('token')?.trim() || undefined;
+      const oobCode = (params.get('oobCode') || params.get('code'))?.trim() || undefined;
+      const email = params.get('email')?.trim().toLowerCase() || undefined;
+      if (token || oobCode || email) {
+        return { token, oobCode, email };
+      }
+    } catch {}
+  }
+
+  // Si es un token directo
+  return { token: cleaned };
+}
+
+/**
+ * Construye la URL de activación canónica usando el origen actual del navegador.
+ */
+export function buildActivationUrl(token: string, email?: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://taprd.com';
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const base = `${origin}/activar?token=${encodeURIComponent(token.trim())}`;
+  return cleanEmail ? `${base}&email=${encodeURIComponent(cleanEmail)}` : base;
+}
+
+/**
  * Codifica una carga útil de activación en un token seguro base64url con prefijo act_
  */
 export function encodeTokenPayload(payload: ActivationPayload): string {
@@ -79,9 +125,11 @@ export function encodeTokenPayload(payload: ActivationPayload): string {
   if (typeof Buffer !== 'undefined') {
     base64 = Buffer.from(json, 'utf8').toString('base64url');
   } else {
-    base64 = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => 
-      String.fromCharCode(parseInt(p1, 16))
-    ))
+    base64 = btoa(
+      encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+        String.fromCharCode(parseInt(p1, 16))
+      )
+    )
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
@@ -102,11 +150,13 @@ export function decodeTokenPayload(token: string): ActivationPayload | null {
       json = Buffer.from(base64, 'base64url').toString('utf8');
     } else {
       const standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = standardBase64.padEnd(standardBase64.length + (4 - standardBase64.length % 4) % 4, '=');
+      const padded = standardBase64.padEnd(standardBase64.length + (4 - (standardBase64.length % 4)) % 4, '=');
       const binary = atob(padded);
-      json = decodeURIComponent(Array.from(binary).map(c => 
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join(''));
+      json = decodeURIComponent(
+        Array.from(binary)
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
     }
     const parsed = JSON.parse(json);
     if (parsed && parsed.c && parsed.e && parsed.x) {
@@ -119,8 +169,7 @@ export function decodeTokenPayload(token: string): ActivationPayload | null {
 }
 
 /**
- * Genera un token criptográfico seguro de activación que codifica los datos esenciales
- * y a la vez se almacena en Firestore y almacenamiento local.
+ * Genera un token criptográfico seguro de activación
  */
 function generateSecureToken(payload?: ActivationPayload): string {
   if (payload) {
@@ -129,9 +178,56 @@ function generateSecureToken(payload?: ActivationPayload): string {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const bytes = new Uint8Array(24);
     crypto.getRandomValues(bytes);
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
   }
   return `act_${Date.now()}_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+}
+
+/**
+ * Registra localmente y en Firestore un token ya generado (por ejemplo, desde el servidor)
+ * evitando duplicar o invalidar el enlace recién creado.
+ */
+export async function registerActivationToken(
+  token: string,
+  clientId: string,
+  email: string,
+  businessName: string,
+  ownerName?: string
+): Promise<{ token: string; activationUrl: string }> {
+  const cleanToken = token.trim();
+  const cleanEmail = email.trim().toLowerCase();
+  const decoded = decodeTokenPayload(cleanToken);
+  const expiresAt = decoded?.x || Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const now = new Date().toISOString();
+
+  const record: ActivationRecord = {
+    token: cleanToken,
+    clientId,
+    email: cleanEmail,
+    businessName,
+    ownerName: ownerName || businessName,
+    used: false,
+    expiresAt,
+    createdAt: now,
+    usedAt: null
+  };
+
+  saveLocalActivation(record);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, 'activations', cleanToken), record, { merge: true });
+    } catch (err) {
+      console.warn('[ActivationService] Aviso sincronizando activación existente:', err);
+    }
+  }
+
+  return {
+    token: cleanToken,
+    activationUrl: buildActivationUrl(cleanToken, cleanEmail)
+  };
 }
 
 /**
@@ -171,7 +267,6 @@ export async function createActivationToken(
     usedAt: null
   };
 
-  // Guardar en Firestore siempre que sea posible
   if (isFirebaseConfigured && db) {
     try {
       await setDoc(doc(db, 'activations', token), record);
@@ -179,41 +274,45 @@ export async function createActivationToken(
       console.warn('[ActivationService] Aviso guardando activación en Firestore, guardando local:', err);
     }
 
-    // Actualizar también en el cliente para redundancia cruzada
     try {
-      await updateDoc(doc(db, 'clients', clientId), {
-        activationToken: token,
-        clientEmail: cleanEmail,
-        accessStatus: 'pending',
-        updatedAt: now
-      });
-    } catch {}
+      await setDoc(
+        doc(db, 'clients', clientId),
+        {
+          activationToken: token,
+          clientEmail: cleanEmail,
+          accessStatus: 'pending',
+          updatedAt: now
+        },
+        { merge: true }
+      );
+    } catch (clientErr) {
+      console.warn('[ActivationService] Aviso actualizando activationToken en cliente:', clientErr);
+    }
   }
 
-  // Guardar en almacenamiento local
   saveLocalActivation(record);
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://taprd.com';
-  const activationUrl = `${origin}/activar?token=${encodeURIComponent(token)}&email=${encodeURIComponent(cleanEmail)}`;
-
-  return { token, activationUrl };
+  return {
+    token,
+    activationUrl: buildActivationUrl(token, cleanEmail)
+  };
 }
 
 /**
- * Valida si un token de activación es legítimo, no ha expirado y no ha sido utilizado
- * Incorpora 4 niveles de verificación:
- * 1. Colección Firestore `activations/{token}`
- * 2. Carga útil autosuficiente `act_${base64url}` con auto-sanación en Firestore
- * 3. Búsqueda directa en `clients/{clientId}` o por correo de cliente
- * 4. Almacenamiento local del navegador
+ * Valida si un token de activación es legítimo, no ha expirado y no ha sido utilizado.
  */
 export async function verifyActivationToken(token: string, hintEmail?: string): Promise<VerifyTokenResult> {
-  const cleanToken = (token || '').trim();
-  const cleanHintEmail = (hintEmail || '').trim().toLowerCase();
+  const extracted = extractActivationParams(token);
+  const cleanToken = (extracted.token || '').trim();
+  const cleanHintEmail = (hintEmail || extracted.email || '').trim().toLowerCase();
 
   if (!cleanToken && !cleanHintEmail) {
     return { valid: false, error: 'Enlace de activación inválido o inexistente.' };
   }
+
+  // Comprobar almacenamiento local primero si ya fue marcado como usado
+  const localActivations = getLocalActivations();
+  const localRecord = cleanToken ? localActivations[cleanToken] : undefined;
 
   // 1. Intentar buscar en colección Firestore `activations/{cleanToken}`
   if (cleanToken && isFirebaseConfigured && db) {
@@ -239,7 +338,7 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
 
         return {
           valid: true,
-          email: data.email,
+          email: (data.email || cleanHintEmail).trim().toLowerCase(),
           clientId: data.clientId,
           businessName: data.businessName,
           docId: snap.id
@@ -254,6 +353,13 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
   if (cleanToken) {
     const decoded = decodeTokenPayload(cleanToken);
     if (decoded) {
+      if (localRecord?.used) {
+        return {
+          valid: false,
+          error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
+        };
+      }
+
       if (Date.now() > decoded.x) {
         return {
           valid: false,
@@ -261,43 +367,43 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
         };
       }
 
-      // Verificar si el cliente en Firestore ya completó la activación
       let clientBusinessName = decoded.b || 'Cliente TapRD';
+      let resolvedEmail = (decoded.e || cleanHintEmail).trim().toLowerCase();
+
       if (isFirebaseConfigured && db) {
         try {
           const clientSnap = await getDoc(doc(db, 'clients', decoded.c));
           if (clientSnap.exists()) {
             const clientData = clientSnap.data() as Client;
             if (clientData.businessName) clientBusinessName = clientData.businessName;
-            if (clientData.accessStatus === 'active') {
-              return {
-                valid: false,
-                error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
-              };
+            if (!resolvedEmail && (clientData.clientEmail || clientData.email)) {
+              resolvedEmail = (clientData.clientEmail || clientData.email || '').trim().toLowerCase();
             }
           }
         } catch {}
-      }
 
-      // Auto-sanación: Guardar el token en Firestore de forma que quede indexado permanentemente
-      if (isFirebaseConfigured && db) {
+        // Auto-sanación en Firestore si no existía el documento
         try {
-          await setDoc(doc(db, 'activations', cleanToken), {
-            token: cleanToken,
-            clientId: decoded.c,
-            email: decoded.e,
-            businessName: clientBusinessName,
-            used: false,
-            expiresAt: decoded.x,
-            createdAt: new Date().toISOString(),
-            usedAt: null
-          });
+          await setDoc(
+            doc(db, 'activations', cleanToken),
+            {
+              token: cleanToken,
+              clientId: decoded.c,
+              email: resolvedEmail,
+              businessName: clientBusinessName,
+              used: false,
+              expiresAt: decoded.x,
+              createdAt: new Date().toISOString(),
+              usedAt: null
+            },
+            { merge: true }
+          );
         } catch {}
       }
 
       return {
         valid: true,
-        email: decoded.e,
+        email: resolvedEmail,
         clientId: decoded.c,
         businessName: clientBusinessName,
         docId: cleanToken
@@ -306,43 +412,36 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
   }
 
   // 3. Fallback a almacenamiento local del navegador
-  if (cleanToken) {
-    const localActivations = getLocalActivations();
-    const localRecord = localActivations[cleanToken];
-
-    if (localRecord) {
-      if (localRecord.used) {
-        return {
-          valid: false,
-          error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
-        };
-      }
-      if (localRecord.expiresAt && Date.now() > localRecord.expiresAt) {
-        return {
-          valid: false,
-          error: 'El enlace de activación ha expirado. Por favor solicita un nuevo enlace al administrador de TapRD.'
-        };
-      }
-
-      // Si existe en local pero no en Firestore, auto-sanar en Firestore
-      if (isFirebaseConfigured && db) {
-        try {
-          await setDoc(doc(db, 'activations', cleanToken), localRecord);
-        } catch {}
-      }
-
+  if (localRecord) {
+    if (localRecord.used) {
       return {
-        valid: true,
-        email: localRecord.email,
-        clientId: localRecord.clientId,
-        businessName: localRecord.businessName,
-        docId: cleanToken
+        valid: false,
+        error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
       };
     }
+    if (localRecord.expiresAt && Date.now() > localRecord.expiresAt) {
+      return {
+        valid: false,
+        error: 'El enlace de activación ha expirado. Por favor solicita un nuevo enlace al administrador de TapRD.'
+      };
+    }
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'activations', cleanToken), localRecord, { merge: true });
+      } catch {}
+    }
+
+    return {
+      valid: true,
+      email: localRecord.email,
+      clientId: localRecord.clientId,
+      businessName: localRecord.businessName,
+      docId: cleanToken
+    };
   }
 
-  // 4. Verificación de rescate para enlaces existentes o tokens generados en versiones anteriores:
-  // Buscar en Firestore si algún cliente tiene este token registrado en su documento clients/{id}
+  // 4. Verificación de rescate en `clients` por activationToken o email
   if (isFirebaseConfigured && db) {
     try {
       if (cleanToken) {
@@ -351,26 +450,23 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
         if (!tokenSnaps.empty) {
           const clientDoc = tokenSnaps.docs[0];
           const cData = clientDoc.data() as Client;
-          if (cData.accessStatus === 'active') {
-            return {
-              valid: false,
-              error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
-            };
-          }
+          const targetEmail = (cData.clientEmail || cData.email || cleanHintEmail).trim().toLowerCase();
 
-          const targetEmail = cData.clientEmail || cData.email || cleanHintEmail;
-          // Auto-sanar en activations
           try {
-            await setDoc(doc(db, 'activations', cleanToken), {
-              token: cleanToken,
-              clientId: clientDoc.id,
-              email: targetEmail,
-              businessName: cData.businessName,
-              used: false,
-              expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-              createdAt: new Date().toISOString(),
-              usedAt: null
-            });
+            await setDoc(
+              doc(db, 'activations', cleanToken),
+              {
+                token: cleanToken,
+                clientId: clientDoc.id,
+                email: targetEmail,
+                businessName: cData.businessName,
+                used: false,
+                expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+                createdAt: new Date().toISOString(),
+                usedAt: null
+              },
+              { merge: true }
+            );
           } catch {}
 
           return {
@@ -383,7 +479,6 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
         }
       }
 
-      // Si se proporcionó hintEmail en la URL (?email=...) y el cliente está pendiente de activación
       if (cleanHintEmail) {
         const qEmail = query(collection(db, 'clients'), where('clientEmail', '==', cleanHintEmail));
         const emailSnaps = await getDocs(qEmail);
@@ -397,26 +492,29 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
 
         if (foundDoc) {
           const cData = foundDoc.data() as Client;
-          if (cData.accessStatus === 'active') {
+          if (cData.accessStatus === 'active' && cData.termsAccepted && !cleanToken) {
             return {
               valid: false,
               error: 'Este enlace de activación ya fue utilizado. Puedes iniciar sesión con tus credenciales.'
             };
           }
 
-          // Auto-sanar con este token
           if (cleanToken) {
             try {
-              await setDoc(doc(db, 'activations', cleanToken), {
-                token: cleanToken,
-                clientId: foundDoc.id,
-                email: cleanHintEmail,
-                businessName: cData.businessName,
-                used: false,
-                expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-                createdAt: new Date().toISOString(),
-                usedAt: null
-              });
+              await setDoc(
+                doc(db, 'activations', cleanToken),
+                {
+                  token: cleanToken,
+                  clientId: foundDoc.id,
+                  email: cleanHintEmail,
+                  businessName: cData.businessName,
+                  used: false,
+                  expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+                  createdAt: new Date().toISOString(),
+                  usedAt: null
+                },
+                { merge: true }
+              );
             } catch {}
           }
 
@@ -442,16 +540,20 @@ export async function verifyActivationToken(token: string, hintEmail?: string): 
 
 /**
  * Completa la activación de la cuenta:
- * - Registra la contraseña en Firebase Authentication
+ * - Registra o actualiza la contraseña en Firebase Authentication
  * - Marca la cuenta como activada
  * - Invalida el token para evitar reutilización
- * - Sincroniza users/{uid} y clients/{clientId}
+ * - Sincroniza users/{uid}, clients/{clientId} y sesión inmediata en el navegador
  */
 export async function completeActivation(
-  token: string,
-  newPassword: string
+  rawToken: string,
+  newPassword: string,
+  hintEmail?: string
 ): Promise<{ success: boolean; error?: string; user?: AppUser; client?: Client }> {
-  const verification = await verifyActivationToken(token);
+  const extracted = extractActivationParams(rawToken);
+  const cleanToken = (extracted.token || rawToken || '').trim();
+  const verification = await verifyActivationToken(cleanToken, hintEmail || extracted.email);
+
   if (!verification.valid || !verification.email || !verification.clientId) {
     return {
       success: false,
@@ -459,186 +561,246 @@ export async function completeActivation(
     };
   }
 
-  const cleanEmail = verification.email.toLowerCase();
+  const cleanEmail = verification.email.trim().toLowerCase();
   const clientId = verification.clientId;
+  const tokenDocId = verification.docId || cleanToken;
   const now = new Date().toISOString();
 
   let authUid = `client_${Date.now()}`;
-
-  // 1. Intentar completar la activación en el backend mediante Admin SDK
   let backendActivated = false;
+
+  setActivationInProgress(true);
   try {
-    const resp = await fetch('/api/client/complete-activation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword })
-    });
-    let data: any = null;
-    try {
-      data = await resp.json();
-    } catch {}
-    if (resp.ok && data && data.success) {
-      backendActivated = true;
-      if (data.userId) authUid = data.userId;
-      // Iniciar sesión con la contraseña recién establecida
-      if (isFirebaseConfigured && auth) {
+    // Cerrar cualquier sesión previa de otro usuario (ej. admin probando el enlace)
+    if (isFirebaseConfigured && auth?.currentUser) {
+      const currentEmail = auth.currentUser.email?.trim().toLowerCase();
+      if (currentEmail !== cleanEmail) {
         try {
-          const cred = await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
-          authUid = cred.user.uid;
+          await firebaseSignOut(auth);
         } catch {}
       }
     }
-  } catch (apiErr) {
-    console.warn('[ActivationService] Aviso conectando con API de activación:', apiErr);
-  }
 
-  // Si no se pudo completar vía backend, intentar directamente en cliente
-  if (!backendActivated && isFirebaseConfigured && auth) {
+    // 1. Intentar completar la activación en el backend mediante Admin SDK
     try {
-      const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
-      authUid = userCred.user.uid;
-    } catch (authErr: any) {
-      // Si el usuario ya fue pre-creado en Auth por Admin SDK
-      if (authErr.code === 'auth/email-already-in-use') {
-        try {
-          // Intentar iniciar sesión para actualizar contraseña
-          const loginCred = await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
-          authUid = loginCred.user.uid;
-        } catch {
-          // Si la contraseña anterior no coincide, solicitar reset email
+      const resp = await fetch('/api/client/complete-activation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tokenDocId, newPassword })
+      });
+      let data: any = null;
+      try {
+        data = await resp.json();
+      } catch {}
+
+      if (resp.ok && data && data.success) {
+        backendActivated = true;
+        if (data.userId) authUid = data.userId;
+        if (isFirebaseConfigured && auth) {
           try {
-            await sendPasswordResetEmail(auth, cleanEmail);
-            return {
-              success: false,
-              error: 'Ya existe una cuenta con este correo. Se ha enviado un correo adicional de restablecimiento de contraseña para verificar tu identidad.'
-            };
-          } catch (resetErr: any) {
-            return {
-              success: false,
-              error: 'Esta cuenta ya está registrada. Por favor utiliza la opción "¿Olvidaste tu contraseña?" en la pantalla de inicio de sesión.'
-            };
+            const cred = await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
+            authUid = cred.user.uid;
+          } catch (signInErr) {
+            console.warn('[ActivationService] Aviso iniciando sesión tras activación backend:', signInErr);
           }
         }
-      } else {
+      } else if (
+        data?.code === 'TOKEN_ALREADY_USED' ||
+        data?.code === 'TOKEN_EXPIRED' ||
+        data?.code === 'TOKEN_INVALID'
+      ) {
         return {
           success: false,
-          error: authErr.message || 'Error al crear la cuenta en el servicio de autenticación.'
+          error: data.error || 'El enlace de activación no es válido.'
         };
       }
+    } catch (apiErr) {
+      console.warn('[ActivationService] Aviso conectando con API de activación, usando respaldo directo:', apiErr);
     }
-  }
 
-  // 2. Crear / Actualizar documento en users/{uid}
-  // Estructura requerida: uid, email, role = 'CLIENT', clientId, active = true, createdAt, updatedAt, términos y privacidad
-  const userDocData: AppUser = {
-    uid: authUid,
-    email: cleanEmail,
-    role: 'CLIENT',
-    clientId: clientId,
-    active: true,
-    displayName: verification.businessName || 'Cliente TapRD',
-    createdAt: now,
-    updatedAt: now,
-    lastLogin: now,
-    termsAccepted: true,
-    privacyAccepted: true,
-    termsAcceptedAt: now,
-    privacyAcceptedAt: now,
-    termsVersion: COMPANY_CONFIG.termsVersion,
-    privacyVersion: COMPANY_CONFIG.privacyVersion
-  };
+    // 2. Respaldo directo en cliente si el backend no pudo ejecutar Admin SDK
+    if (!backendActivated && isFirebaseConfigured && auth) {
+      try {
+        const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
+        authUid = userCred.user.uid;
+        try {
+          await updateProfile(userCred.user, {
+            displayName: verification.businessName || 'Cliente TapRD'
+          });
+        } catch {}
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          try {
+            const loginCred = await signInWithEmailAndPassword(auth, cleanEmail, newPassword);
+            authUid = loginCred.user.uid;
+          } catch {
+            try {
+              await sendPasswordResetEmail(auth, cleanEmail);
+              return {
+                success: false,
+                error:
+                  'Ya existe una cuenta registrada con este correo. Te enviamos un correo oficial para establecer o restablecer tu contraseña y luego iniciar sesión.'
+              };
+            } catch {
+              return {
+                success: false,
+                error:
+                  'Esta cuenta ya está registrada en Firebase Auth. Usa "¿Olvidaste tu contraseña?" en Iniciar Sesión para definir tu clave.'
+              };
+            }
+          }
+        } else {
+          return {
+            success: false,
+            error: authErr.message || 'Error al crear la cuenta en el servicio de autenticación.'
+          };
+        }
+      }
+    }
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'users', authUid), {
-        uid: authUid,
+    // 3. Crear / Actualizar documento en users/{uid}
+    const userDocData: AppUser = {
+      uid: authUid,
+      email: cleanEmail,
+      role: 'CLIENT',
+      clientId: clientId,
+      active: true,
+      displayName: verification.businessName || 'Cliente TapRD',
+      createdAt: now,
+      updatedAt: now,
+      lastLogin: now,
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsAcceptedAt: now,
+      privacyAcceptedAt: now,
+      termsVersion: COMPANY_CONFIG.termsVersion,
+      privacyVersion: COMPANY_CONFIG.privacyVersion
+    };
+
+    if (isFirebaseConfigured && db) {
+      if (!backendActivated) {
+        try {
+          await setDoc(doc(db, 'users', authUid), userDocData, { merge: true });
+        } catch (userDbErr) {
+          console.warn('[ActivationService] Aviso actualizando users/{uid} en Firestore:', userDbErr);
+        }
+
+        try {
+          await updateDoc(doc(db, 'clients', clientId), {
+            userId: authUid,
+            clientEmail: cleanEmail,
+            active: true,
+            status: 'active',
+            accessStatus: 'active',
+            termsAccepted: true,
+            privacyAccepted: true,
+            termsAcceptedAt: now,
+            privacyAcceptedAt: now,
+            termsVersion: COMPANY_CONFIG.termsVersion,
+            privacyVersion: COMPANY_CONFIG.privacyVersion,
+            updatedAt: now
+          });
+        } catch (clientDbErr) {
+          console.warn('[ActivationService] Aviso actualizando clients/{clientId} en Firestore:', clientDbErr);
+        }
+
+        // Marcar el token como usado solo cuando no lo marcó ya el backend
+        try {
+          const actRef = doc(db, 'activations', tokenDocId);
+          const actSnap = await getDoc(actRef);
+          if (actSnap.exists()) {
+            if (!actSnap.data()?.used) {
+              await updateDoc(actRef, {
+                used: true,
+                usedAt: now,
+                activatedUid: authUid
+              });
+            }
+          } else {
+            await setDoc(actRef, {
+              token: tokenDocId,
+              clientId,
+              email: cleanEmail,
+              businessName: verification.businessName || 'Cliente TapRD',
+              used: true,
+              expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+              createdAt: now,
+              usedAt: now,
+              activatedUid: authUid
+            });
+          }
+        } catch (actErr) {
+          console.warn('[ActivationService] Aviso invalidando token en Firestore:', actErr);
+        }
+      }
+    }
+
+    // Actualizar copia local
+    const localMap = getLocalActivations();
+    localMap[tokenDocId] = {
+      ...(localMap[tokenDocId] || {
+        token: tokenDocId,
+        clientId,
         email: cleanEmail,
-        role: 'CLIENT',
-        clientId: clientId,
-        active: true,
-        displayName: verification.businessName || 'Cliente TapRD',
-        createdAt: now,
-        updatedAt: now,
-        lastLogin: now,
-        termsAccepted: true,
-        privacyAccepted: true,
-        termsAcceptedAt: now,
-        privacyAcceptedAt: now,
-        termsVersion: COMPANY_CONFIG.termsVersion,
-        privacyVersion: COMPANY_CONFIG.privacyVersion
-      }, { merge: true });
-    } catch (userDbErr) {
-      console.warn('[ActivationService] Aviso actualizando users/{uid} en Firestore:', userDbErr);
+        businessName: verification.businessName || 'Cliente TapRD',
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: now
+      }),
+      used: true,
+      usedAt: now,
+      activatedUid: authUid
+    };
+    try {
+      localStorage.setItem(LOCAL_ACTIVATIONS_KEY, JSON.stringify(localMap));
+    } catch {}
+
+    // Recuperar datos completos del cliente para iniciar sesión inmediata
+    let clientData: Client | null = null;
+    if (isFirebaseConfigured && db) {
+      try {
+        const cSnap = await getDoc(doc(db, 'clients', clientId));
+        if (cSnap.exists()) {
+          clientData = {
+            ...(cSnap.data() as Client),
+            id: cSnap.id,
+            userId: authUid,
+            clientEmail: cleanEmail,
+            active: true,
+            status: 'active',
+            accessStatus: 'active'
+          };
+        }
+      } catch {}
     }
 
-    // 3. Actualizar documento en clients/{clientId}
-    try {
-      await updateDoc(doc(db, 'clients', clientId), {
+    const finalClientData: Client =
+      clientData ||
+      ({
+        id: clientId,
         userId: authUid,
+        businessName: verification.businessName || 'Mi Negocio',
+        email: cleanEmail,
         clientEmail: cleanEmail,
         active: true,
         status: 'active',
-        accessStatus: 'active',
-        termsAccepted: true,
-        privacyAccepted: true,
-        termsAcceptedAt: now,
-        privacyAcceptedAt: now,
-        termsVersion: COMPANY_CONFIG.termsVersion,
-        privacyVersion: COMPANY_CONFIG.privacyVersion,
-        updatedAt: now
-      });
-    } catch (clientDbErr) {
-      console.warn('[ActivationService] Aviso actualizando clients/{clientId} en Firestore:', clientDbErr);
+        accessStatus: 'active'
+      } as Client);
+
+    // Sincronizar memoria + localStorage + suscriptores de Auth antes de redirigir
+    syncClientSession(userDocData, finalClientData);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('taprd_admin_session_v2', JSON.stringify(userDocData));
+      } catch {}
     }
 
-    // 4. Invalidar token en Firestore
-    try {
-      await updateDoc(doc(db, 'activations', token), {
-        used: true,
-        usedAt: now,
-        activatedUid: authUid
-      });
-    } catch (actErr) {
-      console.warn('[ActivationService] Aviso invalidando token en Firestore:', actErr);
-    }
+    return {
+      success: true,
+      user: userDocData,
+      client: finalClientData
+    };
+  } finally {
+    setActivationInProgress(false);
   }
-
-  // Actualizar copia local
-  const localActivations = getLocalActivations();
-  if (localActivations[token]) {
-    localActivations[token].used = true;
-    localActivations[token].usedAt = now;
-    localActivations[token].activatedUid = authUid;
-    localStorage.setItem(LOCAL_ACTIVATIONS_KEY, JSON.stringify(localActivations));
-  }
-
-  // Recuperar datos completos del cliente para iniciar sesión inmediata
-  let clientData: Client | null = null;
-  if (isFirebaseConfigured && db) {
-    try {
-      const cSnap = await getDoc(doc(db, 'clients', clientId));
-      if (cSnap.exists()) {
-        clientData = { ...(cSnap.data() as Client), id: cSnap.id, active: true, accessStatus: 'active' };
-      }
-    } catch {}
-  }
-
-  // Establecer sesión local para redirección directa
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('taprd_client_session', JSON.stringify(clientData || {
-      id: clientId,
-      businessName: verification.businessName || 'Mi Negocio',
-      email: cleanEmail,
-      active: true,
-      accessStatus: 'active'
-    }));
-    localStorage.setItem('taprd_admin_session', JSON.stringify(userDocData));
-    localStorage.setItem('taprd_admin_session_v2', JSON.stringify(userDocData));
-  }
-
-  return {
-    success: true,
-    user: userDocData,
-    client: clientData || undefined
-  };
 }
+

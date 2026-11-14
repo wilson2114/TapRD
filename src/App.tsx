@@ -58,11 +58,15 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() => {
     return window.location.pathname || '/';
   });
+  const [currentSearch, setCurrentSearch] = useState<string>(() => {
+    return window.location.search || '';
+  });
 
   // Listen for browser back / forward navigation
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname || '/');
+      setCurrentSearch(window.location.search || '');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -72,11 +76,12 @@ export default function App() {
     // Handle anchor links on home page
     if (path.includes('#')) {
       const [basePath, anchor] = path.split('#');
-      const targetBase = basePath || '/';
+      const targetBase = (basePath || '/').split('?')[0] || '/';
 
       if (currentPath !== targetBase) {
         window.history.pushState({}, '', path);
         setCurrentPath(targetBase);
+        setCurrentSearch(window.location.search || '');
         setTimeout(() => {
           const el = document.getElementById(anchor);
           if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -91,7 +96,9 @@ export default function App() {
 
     // Standard navigation
     window.history.pushState({}, '', path);
-    setCurrentPath(path);
+    const [nextPathname, nextQuery] = path.split('?');
+    setCurrentPath(nextPathname || '/');
+    setCurrentSearch(nextQuery ? `?${nextQuery}` : '');
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
@@ -104,13 +111,26 @@ export default function App() {
     navigate(target);
   };
 
+  // Detectar parámetros de activación incluso si el enlace apunta a raíz o /login
+  const searchParams = new URLSearchParams(currentSearch.replace(/&amp;/g, '&'));
+  const hasActivationQuery = Boolean(searchParams.get('token') || searchParams.get('oobCode'));
+
   // =========================================================================
   // PUBLIC AUTHENTICATION & ACTIVATION ROUTES
   // =========================================================================
 
+  // Route: /activar, /cliente/activar (Flujo seguro de activación por correo)
+  if (
+    currentPath === '/activar' || currentPath === '/activar/' ||
+    currentPath === '/cliente/activar' || currentPath === '/cliente/activar/' ||
+    (hasActivationQuery && (currentPath === '/' || currentPath === '/login' || currentPath === '/login/'))
+  ) {
+    return <ClientActivationPage key={currentSearch || 'default'} onNavigate={navigate} />;
+  }
+
   // Route: /login, /admin/login, /cliente/login, /ingresar, /iniciar-sesion
   if (
-    currentPath === '/login' || currentPath === '/login/' || currentPath.startsWith('/login?') ||
+    currentPath === '/login' || currentPath === '/login/' ||
     currentPath === '/admin/login' || currentPath === '/admin/login/' ||
     currentPath === '/cliente/login' || currentPath === '/cliente/login/' ||
     currentPath === '/admin/registro' || currentPath === '/admin/registro/' ||
@@ -127,14 +147,6 @@ export default function App() {
     currentPath === '/cliente/recuperar' || currentPath === '/cliente/recuperar/'
   ) {
     return <LoginPage onNavigate={navigate} initialMode="recovery" />;
-  }
-
-  // Route: /activar, /cliente/activar (Flujo seguro de activación por correo)
-  if (
-    currentPath === '/activar' || currentPath === '/activar/' || currentPath.startsWith('/activar?') ||
-    currentPath === '/cliente/activar' || currentPath === '/cliente/activar/' || currentPath.startsWith('/cliente/activar?')
-  ) {
-    return <ClientActivationPage onNavigate={navigate} />;
   }
 
   // =========================================================================

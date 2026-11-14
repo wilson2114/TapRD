@@ -17,6 +17,14 @@ interface AuthContext {
  * Verifica el token Bearer del solicitante y corrobora sus permisos administrativos.
  * Regla 4: Las custom claims y roles administrativos se verifican rigurosamente en backend.
  */
+function getRequestOrigin(req: Request): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(',')[0]?.trim() || req.protocol || 'https';
+  const forwardedHost = req.headers['x-forwarded-host'];
+  const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost)?.split(',')[0]?.trim() || req.get('host') || 'taprd.com';
+  return `${proto}://${host}`;
+}
+
 function encodeTokenPayload(payload: { c: string; e: string; b?: string; o?: string; x: number; r: string }): string {
   const json = JSON.stringify(payload);
   const base64 = Buffer.from(json, 'utf8').toString('base64url');
@@ -25,8 +33,9 @@ function encodeTokenPayload(payload: { c: string; e: string; b?: string; o?: str
 
 function decodeTokenPayload(token: string): any {
   try {
-    if (!token.startsWith('act_')) return null;
-    const base64 = token.substring(4);
+    const clean = (token || '').trim();
+    if (!clean.startsWith('act_')) return null;
+    const base64 = clean.substring(4);
     const json = Buffer.from(base64, 'base64url').toString('utf8');
     return JSON.parse(json);
   } catch {
@@ -129,32 +138,30 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !auth || !db) {
+    res.status(503).json({
+      error: 'Firebase Admin SDK no cuenta con credenciales de cuenta de servicio en este entorno.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
 
   try {
     let clientData: any = null;
 
     // 4. Obtener el cliente desde Firestore y verificar existencia (Regla 6 y 7)
-    if (isConfigured && db) {
-      const clientDoc = await db.collection('clients').doc(clientId).get();
-      if (!clientDoc.exists) {
-        res.status(404).json({ error: 'El cliente especificado no existe en la base de datos.' });
-        return;
-      }
-      clientData = clientDoc.data();
-    } else {
-      // Fallback si no hay Firestore admin inicializado
-      clientData = {
-        id: clientId,
-        businessName: ownerName || 'Cliente TapRD',
-        email: cleanEmail
-      };
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists) {
+      res.status(404).json({ error: 'El cliente especificado no existe en la base de datos.' });
+      return;
     }
+    clientData = clientDoc.data();
 
-    // 5. Comprobar que no tenga ya un userId activo (Regla 7)
-    if (clientData.userId && clientData.accessStatus && clientData.accessStatus !== 'none') {
+    // 5. Comprobar si ya tiene un acceso activo (permitir regenerar si estaba en 'none')
+    if (clientData.userId && !String(clientData.userId).startsWith('client_') && clientData.accessStatus === 'active') {
       res.status(409).json({
-        error: 'Este cliente ya tiene un acceso configurado.',
+        error: 'Este cliente ya tiene un acceso activo configurado.',
         userId: clientData.userId,
         accessStatus: clientData.accessStatus
       });
@@ -163,30 +170,24 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
 
     // 6. Comprobar si el email ya pertenece a otro usuario en Authentication (Regla 7 y 22)
     let existingAuthUser = null;
-    if (isConfigured && auth) {
-      try {
-        existingAuthUser = await auth.getUserByEmail(cleanEmail);
-      } catch (err: any) {
-        // auth/user-not-found es lo esperado
-        if (err.code !== 'auth/user-not-found') {
-          console.warn('[AdminAccess] Comprobación de usuario:', err.message);
-        }
+    try {
+      existingAuthUser = await auth.getUserByEmail(cleanEmail);
+    } catch (err: any) {
+      if (err.code !== 'auth/user-not-found') {
+        console.warn('[AdminAccess] Comprobación de usuario:', err.message);
       }
     }
 
-    if (existingAuthUser) {
-      res.status(409).json({
-        error: 'Ese correo electrónico ya está asociado a una cuenta en el sistema. Verifica los datos o utiliza otro correo.'
-      });
-      return;
-    }
-
-    // 7. Crear el usuario en Firebase Authentication mediante Admin SDK (Regla 8 y 10)
-    // NO se introduce ni genera contraseña visible por el admin (Regla 2)
-    let newUid = `client_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    let newUid = '';
     let activationLink: string | null = null;
 
-    if (isConfigured && auth) {
+    if (existingAuthUser) {
+      newUid = existingAuthUser.uid;
+      await auth.setCustomUserClaims(newUid, {
+        role: 'CLIENT',
+        clientId: clientId
+      });
+    } else {
       try {
         const createdUser = await auth.createUser({
           email: cleanEmail,
@@ -196,23 +197,16 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
         });
         newUid = createdUser.uid;
 
-        // 8. Establecer Custom Claims: role = 'CLIENT' y clientId (Regla 4)
         await auth.setCustomUserClaims(newUid, {
           role: 'CLIENT',
           clientId: clientId
         });
         console.log(`[AdminAccess] Custom Claims asignadas al UID ${newUid}: { role: 'CLIENT', clientId: '${clientId}' }`);
-
-        // 9. Generar enlace seguro de restablecimiento/activación de contraseña
-        try {
-          activationLink = await auth.generatePasswordResetLink(cleanEmail);
-        } catch (linkErr) {
-          console.warn('[AdminAccess] No se pudo generar passwordResetLink automático:', linkErr);
-        }
       } catch (authCreateErr: any) {
         console.error('[AdminAccess] Error creando usuario en Firebase Auth:', authCreateErr);
-        res.status(500).json({
-          error: 'No se pudo crear la cuenta de autenticación. Verifica las credenciales del servidor.'
+        res.status(503).json({
+          error: 'No se pudo crear la cuenta de autenticación desde el servidor.',
+          code: 'ADMIN_SDK_UNAVAILABLE'
         });
         return;
       }
@@ -228,7 +222,7 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
       x: expiresAt,
       r: crypto.randomBytes(12).toString('hex')
     });
-    const origin = `${req.protocol}://${req.get('host')}`;
+    const origin = getRequestOrigin(req);
     const customActivationLink = `${origin}/activar?token=${encodeURIComponent(activationToken)}&email=${encodeURIComponent(cleanEmail)}`;
 
     // 10. Crear documento en colección users/{uid} (Regla 6)
@@ -243,51 +237,48 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
       updatedAt: nowIso
     };
 
-    // 11. Actualizar documento clients/{clientId} con userId y accessStatus = 'pending' (Regla 5 y 12)
+    // 11. Actualizar documento clients/{clientId} con userId, activationToken y accessStatus = 'pending'
     const clientUpdates = {
       userId: newUid,
       clientEmail: cleanEmail,
       accessStatus: 'pending',
+      activationToken,
       updatedAt: nowIso
     };
 
-    if (isConfigured && db) {
-      try {
-        // Escritura consistente
-        const batch = db.batch();
-        const userRef = db.collection('users').doc(newUid);
-        const clientRef = db.collection('clients').doc(clientId);
-        const activationRef = db.collection('activations').doc(activationToken);
+    try {
+      const batch = db.batch();
+      const userRef = db.collection('users').doc(newUid);
+      const clientRef = db.collection('clients').doc(clientId);
+      const activationRef = db.collection('activations').doc(activationToken);
 
-        batch.set(userRef, userDocData);
-        batch.update(clientRef, clientUpdates);
-        batch.set(activationRef, {
-          token: activationToken,
-          clientId,
-          email: cleanEmail,
-          businessName: clientData.businessName || ownerName || 'Cliente TapRD',
-          used: false,
-          expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-          createdAt: nowIso,
-          usedAt: null
-        });
+      batch.set(userRef, userDocData, { merge: true });
+      batch.update(clientRef, clientUpdates);
+      batch.set(activationRef, {
+        token: activationToken,
+        clientId,
+        email: cleanEmail,
+        businessName: clientData.businessName || ownerName || 'Cliente TapRD',
+        used: false,
+        expiresAt,
+        createdAt: nowIso,
+        usedAt: null
+      });
 
-        await batch.commit();
-        console.log(`[AdminAccess] Documentos actualizados consistentemente para clientId: ${clientId}`);
-      } catch (dbErr) {
-        console.error('[AdminAccess] Error actualizando Firestore tras crear Auth:', dbErr);
-        // Compensación / rollback si falla Firestore (Regla 25)
-        if (isConfigured && auth) {
-          try {
-            await auth.deleteUser(newUid);
-            console.log(`[AdminAccess] Rollback completado: usuario ${newUid} eliminado tras fallo en Firestore`);
-          } catch {}
-        }
-        res.status(500).json({
-          error: 'No se pudo vincular la cuenta con el negocio. Se canceló la operación para evitar inconsistencias.'
-        });
-        return;
+      await batch.commit();
+      console.log(`[AdminAccess] Documentos actualizados consistentemente para clientId: ${clientId}`);
+    } catch (dbErr) {
+      console.error('[AdminAccess] Error actualizando Firestore tras crear Auth:', dbErr);
+      if (!existingAuthUser && newUid) {
+        try {
+          await auth.deleteUser(newUid);
+        } catch {}
       }
+      res.status(503).json({
+        error: 'No se pudo vincular la cuenta en Firestore desde el servidor.',
+        code: 'ADMIN_SDK_UNAVAILABLE'
+      });
+      return;
     }
 
     // 12. Registrar en colección de auditoría auditLogs (Regla 18)
@@ -309,13 +300,15 @@ export async function createClientAccessHandler(req: Request, res: Response): Pr
       userId: newUid,
       accessStatus: 'pending',
       email: cleanEmail,
+      activationToken,
       message: 'Acceso creado exitosamente. Enlace de activación listo para enviar al cliente.',
       activationLink: customActivationLink || activationLink || null
     });
   } catch (err: any) {
     console.error('[AdminAccess] Error inesperado en createClientAccess:', err);
-    res.status(500).json({
-      error: 'El acceso no pudo crearse. Verifica los datos o revisa si el cliente ya tiene una cuenta.'
+    res.status(503).json({
+      error: 'El acceso no pudo crearse en el servidor. Aplicando respaldo directo.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
     });
   }
 }
@@ -351,61 +344,76 @@ export async function resendClientInvitationHandler(req: Request, res: Response)
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !db) {
+    res.status(503).json({
+      error: 'Admin SDK sin credenciales de servicio.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
 
   try {
     let clientEmail = '';
     let userId = '';
+    let businessName = 'Cliente TapRD';
 
-    if (isConfigured && db) {
-      const clientDoc = await db.collection('clients').doc(clientId).get();
-      if (!clientDoc.exists) {
-        res.status(404).json({ error: 'Cliente no encontrado.' });
-        return;
-      }
-      const data = clientDoc.data() || {};
-      userId = data.userId;
-      clientEmail = data.clientEmail || data.email;
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists) {
+      res.status(404).json({ error: 'Cliente no encontrado.' });
+      return;
     }
+    const data = clientDoc.data() || {};
+    userId = data.userId || '';
+    clientEmail = (data.clientEmail || data.email || '').trim().toLowerCase();
+    businessName = data.businessName || 'Cliente TapRD';
 
-    if (!userId) {
-      res.status(400).json({ error: 'Este cliente aún no tiene un acceso creado. Debes crear el acceso primero.' });
+    if (!clientEmail) {
+      res.status(400).json({ error: 'Este cliente no tiene un correo electrónico configurado.' });
       return;
     }
 
     let activationLink: string | null = null;
     let customActivationLink: string | null = null;
+    let activationToken = typeof req.body.token === 'string' && req.body.token.trim() ? req.body.token.trim() : '';
 
-    if (clientEmail) {
+    if (!activationToken) {
       const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      const activationToken = encodeTokenPayload({
+      activationToken = encodeTokenPayload({
         c: clientId,
         e: clientEmail,
-        b: 'Cliente TapRD',
+        b: businessName,
         x: expiresAt,
         r: crypto.randomBytes(12).toString('hex')
       });
-      const origin = `${req.protocol}://${req.get('host')}`;
-      customActivationLink = `${origin}/activar?token=${encodeURIComponent(activationToken)}&email=${encodeURIComponent(clientEmail)}`;
-
-      if (isConfigured && db) {
-        try {
-          await db.collection('activations').doc(activationToken).set({
-            token: activationToken,
-            clientId,
-            email: clientEmail,
-            used: false,
-            expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-            createdAt: new Date().toISOString(),
-            usedAt: null
-          });
-        } catch (actDbErr) {
-          console.warn('[AdminAccess] Error guardando token de activación en Firestore:', actDbErr);
-        }
-      }
     }
 
-    if (isConfigured && auth && clientEmail) {
+    const origin = getRequestOrigin(req);
+    customActivationLink = `${origin}/activar?token=${encodeURIComponent(activationToken)}&email=${encodeURIComponent(clientEmail)}`;
+
+    try {
+      await db.collection('activations').doc(activationToken).set({
+        token: activationToken,
+        clientId,
+        email: clientEmail,
+        businessName,
+        used: false,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        createdAt: new Date().toISOString(),
+        usedAt: null
+      }, { merge: true });
+
+      await db.collection('clients').doc(clientId).set({
+        activationToken,
+        clientEmail,
+        accessStatus: data.accessStatus === 'active' ? 'active' : 'pending',
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (actDbErr) {
+      console.warn('[AdminAccess] Error guardando token de activación en Firestore:', actDbErr);
+    }
+
+    if (auth && clientEmail) {
       try {
         activationLink = await auth.generatePasswordResetLink(clientEmail);
       } catch (err) {
@@ -413,7 +421,6 @@ export async function resendClientInvitationHandler(req: Request, res: Response)
       }
     }
 
-    // Registrar en auditoría
     await logAuditEvent({
       actorUid: adminUser.uid,
       actorRole: adminUser.role,
@@ -425,11 +432,15 @@ export async function resendClientInvitationHandler(req: Request, res: Response)
     res.status(200).json({
       success: true,
       clientId,
+      activationToken,
       message: 'Invitación regenerada exitosamente.',
       activationLink: customActivationLink || activationLink || null
     });
   } catch (err) {
-    res.status(500).json({ error: 'No se pudo reenviar la invitación en este momento.' });
+    res.status(503).json({
+      error: 'No se pudo reenviar la invitación en el servidor.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
   }
 }
 
@@ -638,20 +649,25 @@ export async function verifyClientAccessStatusHandler(req: Request, res: Respons
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !db) {
+    res.status(503).json({
+      error: 'Admin SDK sin credenciales de servicio.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
 
   try {
     let clientData: any = null;
     let targetUserId = userId;
     let targetEmail = email ? email.trim().toLowerCase() : '';
 
-    if (isConfigured && db) {
-      const clientDoc = await db.collection('clients').doc(clientId).get();
-      if (clientDoc.exists) {
-        clientData = clientDoc.data();
-        if (!targetUserId) targetUserId = clientData.userId;
-        if (!targetEmail) targetEmail = (clientData.clientEmail || clientData.email || '').trim().toLowerCase();
-      }
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (clientDoc.exists) {
+      clientData = clientDoc.data();
+      if (!targetUserId) targetUserId = clientData.userId;
+      if (!targetEmail) targetEmail = (clientData.clientEmail || clientData.email || '').trim().toLowerCase();
     }
 
     // 1. Si está explícitamente suspendido por el administrador
@@ -666,9 +682,22 @@ export async function verifyClientAccessStatusHandler(req: Request, res: Respons
       return;
     }
 
+    // 2. Verificar si existe un token de activación pendiente SIN USAR antes de marcar como activo
+    let hasUnusedPendingToken = false;
+    if (clientData?.activationToken && clientData?.accessStatus === 'pending') {
+      try {
+        const actSnap = await db.collection('activations').doc(clientData.activationToken).get();
+        if (!actSnap.exists || actSnap.data()?.used === false) {
+          hasUnusedPendingToken = true;
+        }
+      } catch {
+        hasUnusedPendingToken = true;
+      }
+    }
+
     let authUser: any = null;
-    if (isConfigured && auth) {
-      if (targetUserId) {
+    if (auth) {
+      if (targetUserId && !String(targetUserId).startsWith('client_')) {
         try {
           authUser = await auth.getUser(targetUserId);
         } catch {}
@@ -682,56 +711,34 @@ export async function verifyClientAccessStatusHandler(req: Request, res: Respons
     }
 
     let userDocData: any = null;
-    if (isConfigured && db) {
-      if (targetUserId) {
-        try {
-          const uDoc = await db.collection('users').doc(targetUserId).get();
-          if (uDoc.exists) {
-            userDocData = uDoc.data();
-          }
-        } catch {}
-      }
-      if (!userDocData && targetEmail) {
-        try {
-          const uQuery = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
-          if (!uQuery.empty) {
-            userDocData = uQuery.docs[0].data();
-            if (!targetUserId) targetUserId = uQuery.docs[0].id;
-          }
-        } catch {}
-      }
-      if (!userDocData && clientId) {
-        try {
-          const uQuery = await db.collection('users').where('clientId', '==', clientId).limit(1).get();
-          if (!uQuery.empty) {
-            userDocData = uQuery.docs[0].data();
-            if (!targetUserId) targetUserId = uQuery.docs[0].id;
-          }
-        } catch {}
-      }
+    if (targetUserId) {
+      try {
+        const uDoc = await db.collection('users').doc(targetUserId).get();
+        if (uDoc.exists) {
+          userDocData = uDoc.data();
+        }
+      } catch {}
     }
 
     let realStatus: 'none' | 'pending' | 'active' | 'suspended' = 'none';
 
-    if (authUser) {
-      if (authUser.disabled || userDocData?.active === false) {
-        realStatus = 'suspended';
-      } else {
-        // El cliente tiene una cuenta válida en Firebase Authentication y está habilitado
-        realStatus = 'active';
-      }
-    } else if (userDocData && userDocData.active !== false && (userDocData.role === 'CLIENT' || userDocData.role === 'client')) {
-      realStatus = 'active';
-    } else if (clientData?.activationToken || clientData?.accessStatus === 'pending') {
+    if (authUser && (authUser.disabled || userDocData?.active === false)) {
+      realStatus = 'suspended';
+    } else if (hasUnusedPendingToken && !authUser?.metadata?.lastSignInTime && !clientData?.termsAccepted) {
       realStatus = 'pending';
-    } else if (clientData?.userId) {
+    } else if (authUser && (authUser.metadata?.lastSignInTime || clientData?.termsAccepted || clientData?.accessStatus === 'active')) {
+      realStatus = 'active';
+    } else if (clientData?.accessStatus === 'pending' || clientData?.activationToken) {
+      realStatus = 'pending';
+    } else if (clientData?.accessStatus === 'active') {
+      realStatus = 'active';
+    } else if (userDocData && userDocData.active !== false && (userDocData.role === 'CLIENT' || userDocData.role === 'client') && clientData?.termsAccepted) {
       realStatus = 'active';
     } else {
       realStatus = 'none';
     }
 
-    // Si el estado real es 'active' y en Firestore figuraba como 'pending', auto-sincronizar
-    if (isConfigured && db && clientData && realStatus === 'active' && clientData.accessStatus !== 'active') {
+    if (clientData && realStatus === 'active' && clientData.accessStatus !== 'active') {
       try {
         const updates: Record<string, any> = {
           accessStatus: 'active',
@@ -744,7 +751,6 @@ export async function verifyClientAccessStatusHandler(req: Request, res: Respons
           updates.clientEmail = authUser.email;
         }
         await db.collection('clients').doc(clientId).update(updates);
-        console.log(`[AdminAccess] Auto-sincronizado cliente ${clientId} a 'active'`);
       } catch (syncErr) {
         console.warn('[AdminAccess] Aviso actualizando client doc en verify:', syncErr);
       }
@@ -759,7 +765,10 @@ export async function verifyClientAccessStatusHandler(req: Request, res: Respons
     });
   } catch (err: any) {
     console.error('[AdminAccess] Error en verifyClientAccessStatusHandler:', err);
-    res.status(500).json({ error: 'Error al verificar el estado del cliente.' });
+    res.status(503).json({
+      error: 'Error al verificar el estado del cliente.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
   }
 }
 
@@ -780,7 +789,15 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !db) {
+    res.status(503).json({
+      error: 'Admin SDK sin credenciales de servicio.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
+
   const statuses: Record<string, 'none' | 'pending' | 'active' | 'suspended'> = {};
 
   try {
@@ -795,40 +812,37 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
         continue;
       }
 
+      let clientDocData: any = null;
+      try {
+        const cSnap = await db.collection('clients').doc(c.id).get();
+        if (cSnap.exists) clientDocData = cSnap.data();
+      } catch {}
+
+      let hasUnusedPendingToken = false;
+      const tokenToCheck = clientDocData?.activationToken || c.activationToken;
+      if (tokenToCheck && (currentAccessStatus === 'pending' || clientDocData?.accessStatus === 'pending')) {
+        try {
+          const actSnap = await db.collection('activations').doc(tokenToCheck).get();
+          if (!actSnap.exists || actSnap.data()?.used === false) {
+            hasUnusedPendingToken = true;
+          }
+        } catch {
+          hasUnusedPendingToken = true;
+        }
+      }
+
       let authUser: any = null;
       let userDoc: any = null;
 
-      if (isConfigured && db && targetUserId) {
+      if (targetUserId && !String(targetUserId).startsWith('client_')) {
         try {
           const uSnap = await db.collection('users').doc(targetUserId).get();
-          if (uSnap.exists) {
-            userDoc = uSnap.data();
-          }
+          if (uSnap.exists) userDoc = uSnap.data();
         } catch {}
       }
 
-      if (isConfigured && db && !userDoc && targetEmail) {
-        try {
-          const uQuery = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
-          if (!uQuery.empty) {
-            userDoc = uQuery.docs[0].data();
-            if (!targetUserId) targetUserId = uQuery.docs[0].id;
-          }
-        } catch {}
-      }
-
-      if (isConfigured && db && !userDoc && c.id) {
-        try {
-          const uQuery = await db.collection('users').where('clientId', '==', c.id).limit(1).get();
-          if (!uQuery.empty) {
-            userDoc = uQuery.docs[0].data();
-            if (!targetUserId) targetUserId = uQuery.docs[0].id;
-          }
-        } catch {}
-      }
-
-      if (isConfigured && auth) {
-        if (targetUserId) {
+      if (auth) {
+        if (targetUserId && !String(targetUserId).startsWith('client_')) {
           try {
             authUser = await auth.getUser(targetUserId);
           } catch {}
@@ -843,17 +857,13 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
 
       let realStatus: 'none' | 'pending' | 'active' | 'suspended' = 'none';
 
-      if (authUser) {
-        if (authUser.disabled || userDoc?.active === false) {
-          realStatus = 'suspended';
-        } else {
-          realStatus = 'active';
-        }
-      } else if (userDoc && userDoc.active !== false && (userDoc.role === 'CLIENT' || userDoc.role === 'client')) {
+      if (authUser && (authUser.disabled || userDoc?.active === false)) {
+        realStatus = 'suspended';
+      } else if (hasUnusedPendingToken && !authUser?.metadata?.lastSignInTime && !clientDocData?.termsAccepted) {
+        realStatus = 'pending';
+      } else if (authUser && (authUser.metadata?.lastSignInTime || clientDocData?.termsAccepted || currentAccessStatus === 'active')) {
         realStatus = 'active';
-      } else if (c.userId && c.userId.length > 15) {
-        realStatus = 'active';
-      } else if (currentAccessStatus === 'pending' || c.activationToken) {
+      } else if (currentAccessStatus === 'pending' || tokenToCheck) {
         realStatus = 'pending';
       } else if (currentAccessStatus === 'active') {
         realStatus = 'active';
@@ -863,8 +873,7 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
 
       statuses[c.id] = realStatus;
 
-      // Auto-sincronizar en Firestore si correspondía
-      if (isConfigured && db && realStatus === 'active' && currentAccessStatus !== 'active') {
+      if (realStatus === 'active' && currentAccessStatus !== 'active') {
         try {
           const syncUpdates: Record<string, any> = {
             accessStatus: 'active',
@@ -884,7 +893,10 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
     });
   } catch (err: any) {
     console.error('[AdminAccess] Error en batchVerifyClientAccessStatusesHandler:', err);
-    res.status(500).json({ error: 'Error verificando lote de clientes.' });
+    res.status(503).json({
+      error: 'Error verificando lote de clientes.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
   }
 }
 
@@ -894,8 +906,9 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
  * Asigna la contraseña elegida en Firebase Authentication usando Admin SDK.
  */
 export async function completeActivationHandler(req: Request, res: Response): Promise<void> {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword) {
+  const rawToken = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+  if (!rawToken || !newPassword) {
     res.status(400).json({ error: 'Token y contraseña son obligatorios.' });
     return;
   }
@@ -905,50 +918,73 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
-  if (!isConfigured || !auth || !db) {
-    res.status(503).json({ error: 'El servicio de autenticación no está disponible en este momento.' });
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !auth || !db) {
+    res.status(503).json({
+      error: 'El servicio Admin SDK no está disponible en este entorno.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
     return;
   }
 
   try {
     // 1. Verificar token
     let tokenData: any = null;
-    const actDoc = await db.collection('activations').doc(token).get();
+    const actDoc = await db.collection('activations').doc(rawToken).get();
     if (actDoc.exists) {
       tokenData = actDoc.data();
       if (tokenData.used) {
-        res.status(400).json({ error: 'Este enlace de activación ya fue utilizado previamente.' });
+        res.status(400).json({
+          error: 'Este enlace de activación ya fue utilizado previamente.',
+          code: 'TOKEN_ALREADY_USED'
+        });
         return;
       }
       if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
-        res.status(400).json({ error: 'Este enlace de activación ha expirado. Solicita una nueva invitación.' });
+        res.status(400).json({
+          error: 'Este enlace de activación ha expirado. Solicita una nueva invitación.',
+          code: 'TOKEN_EXPIRED'
+        });
         return;
       }
     } else {
-      // Intentar decodificar payload
-      const payload = decodeTokenPayload(token);
+      // Intentar decodificar payload autosuficiente
+      const payload = decodeTokenPayload(rawToken);
       if (payload && payload.c && payload.e) {
         tokenData = {
           clientId: payload.c,
           email: payload.e,
+          businessName: payload.b,
           expiresAt: payload.x
         };
         if (payload.x && Date.now() > payload.x) {
-          res.status(400).json({ error: 'Este enlace de activación ha expirado.' });
+          res.status(400).json({
+            error: 'Este enlace de activación ha expirado.',
+            code: 'TOKEN_EXPIRED'
+          });
           return;
         }
       }
     }
 
     if (!tokenData || !tokenData.email || !tokenData.clientId) {
-      res.status(400).json({ error: 'Enlace de activación inválido.' });
+      res.status(400).json({ error: 'Enlace de activación inválido.', code: 'TOKEN_INVALID' });
       return;
     }
 
     const cleanEmail = tokenData.email.trim().toLowerCase();
     const clientId = tokenData.clientId;
     const nowIso = new Date().toISOString();
+
+    const clientRef = db.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) {
+      res.status(400).json({
+        error: 'El perfil comercial asociado a este enlace no existe o fue eliminado.',
+        code: 'TOKEN_INVALID'
+      });
+      return;
+    }
 
     // 2. Buscar o crear usuario en Firebase Authentication
     let authUser: any = null;
@@ -967,16 +1003,23 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
       const created = await auth.createUser({
         email: cleanEmail,
         password: newPassword,
+        displayName: tokenData.businessName || 'Cliente TapRD',
         disabled: false
       });
       authUid = created.uid;
     }
 
+    try {
+      await auth.setCustomUserClaims(authUid, {
+        role: 'CLIENT',
+        clientId
+      });
+    } catch {}
+
     // 3. Actualizar Firestore
     const batch = db.batch();
-    const clientRef = db.collection('clients').doc(clientId);
     const userRef = db.collection('users').doc(authUid);
-    const actRef = db.collection('activations').doc(token);
+    const actRef = db.collection('activations').doc(rawToken);
 
     batch.set(clientRef, {
       userId: authUid,
@@ -984,19 +1027,31 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
       active: true,
       status: 'active',
       accessStatus: 'active',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsAcceptedAt: nowIso,
+      privacyAcceptedAt: nowIso,
       updatedAt: nowIso
     }, { merge: true });
 
     batch.set(userRef, {
       uid: authUid,
       email: cleanEmail,
+      displayName: tokenData.businessName || 'Cliente TapRD',
       role: 'CLIENT',
       clientId,
       active: true,
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsAcceptedAt: nowIso,
+      privacyAcceptedAt: nowIso,
       updatedAt: nowIso
     }, { merge: true });
 
     batch.set(actRef, {
+      token: rawToken,
+      clientId,
+      email: cleanEmail,
       used: true,
       usedAt: nowIso,
       activatedUid: authUid
@@ -1013,7 +1068,10 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
     });
   } catch (err: any) {
     console.error('[AdminAccess] Error en completeActivationHandler:', err);
-    res.status(500).json({ error: 'Error al completar la activación de la cuenta.' });
+    res.status(503).json({
+      error: 'El servicio Admin SDK no pudo completar la activación en servidor.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
   }
 }
 

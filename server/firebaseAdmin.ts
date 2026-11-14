@@ -5,6 +5,7 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
 let adminApp: App | null = null;
 let adminAuth: Auth | null = null;
 let adminDb: Firestore | null = null;
+let hasServiceAccountCreds = false;
 let initAttempted = false;
 let initFailed = false;
 
@@ -18,7 +19,8 @@ export function getFirebaseAdmin() {
       app: adminApp,
       auth: adminAuth,
       db: adminDb,
-      isConfigured: true
+      isConfigured: true,
+      hasServiceAccount: hasServiceAccountCreds
     };
   }
 
@@ -31,7 +33,8 @@ export function getFirebaseAdmin() {
       app: adminApp,
       auth: adminAuth,
       db: adminDb,
-      isConfigured: true
+      isConfigured: true,
+      hasServiceAccount: hasServiceAccountCreds
     };
   }
 
@@ -40,7 +43,8 @@ export function getFirebaseAdmin() {
       app: null,
       auth: null as any,
       db: null as any,
-      isConfigured: false
+      isConfigured: false,
+      hasServiceAccount: false
     };
   }
 
@@ -67,12 +71,14 @@ export function getFirebaseAdmin() {
         });
         adminAuth = getAuth(adminApp);
         adminDb = getFirestore(adminApp);
+        hasServiceAccountCreds = true;
         console.log('[FirebaseAdmin] Inicializado con Service Account Key personalizada');
         return {
           app: adminApp,
           auth: adminAuth,
           db: adminDb,
-          isConfigured: true
+          isConfigured: true,
+          hasServiceAccount: true
         };
       } catch (parseErr) {
         console.warn('[FirebaseAdmin] Error al parsear FIREBASE_SERVICE_ACCOUNT_KEY:', parseErr);
@@ -89,12 +95,14 @@ export function getFirebaseAdmin() {
     } catch {
       adminDb = null;
     }
+    hasServiceAccountCreds = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
     console.log('[FirebaseAdmin] Inicializado en modo de verificación de ID tokens con Project ID taprd-16064');
     return {
       app: adminApp,
       auth: adminAuth,
       db: adminDb,
-      isConfigured: true
+      isConfigured: true,
+      hasServiceAccount: hasServiceAccountCreds
     };
   } catch (err: any) {
     console.warn('[FirebaseAdmin] Aviso inicializando Admin SDK:', err.message || err);
@@ -103,7 +111,8 @@ export function getFirebaseAdmin() {
       app: null,
       auth: null as any,
       db: null as any,
-      isConfigured: false
+      isConfigured: false,
+      hasServiceAccount: false
     };
   }
 }

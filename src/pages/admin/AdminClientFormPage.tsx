@@ -46,6 +46,7 @@ import {
   reactivateClientAccess,
   verifyClientAccessStatus
 } from '../../services/clientAccessService';
+import { buildActivationUrl } from '../../services/activationService';
 import { ClientAccessStatus, ClientBankAccount, ClientSubscriptionStatus, ClientContractStatus } from '../../types/client';
 import { COMPANY_CONFIG } from '../../config/company';
 import { DOMINICAN_BANKS, ACCOUNT_TYPES, CURRENCIES } from '../../config/bankConstants';
@@ -304,10 +305,19 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
           const emailForAccess = found.clientEmail || found.email || '';
           setClientAccessEmail(emailForAccess);
 
+          if (found.activationToken && (initialAccess !== 'active' || !found.termsAccepted)) {
+            setActivationLink(buildActivationUrl(found.activationToken, emailForAccess));
+          } else {
+            setActivationLink('');
+          }
+
           // Verificar automáticamente el estado real con Firebase Authentication / Firestore
           verifyClientAccessStatus(found.id, found.userId, emailForAccess)
             .then((verified) => {
               if (verified && verified !== 'none' && verified !== initialAccess) {
+                if (verified === 'active' && found.activationToken && !found.termsAccepted) {
+                  return;
+                }
                 setAccessStatus(verified);
               }
             })

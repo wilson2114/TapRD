@@ -152,6 +152,7 @@ export function initFirestoreRealtimeListener(): () => void {
           const list: Client[] = [];
           snapshot.forEach((d) => {
             const data = d.data() as Client;
+            if (!data?.businessName && !data?.slug) return;
             list.push({ ...data, id: d.id });
           });
 
@@ -234,7 +235,9 @@ export async function fetchClients(): Promise<Client[]> {
     if (!snap.empty) {
       const list: Client[] = [];
       snap.forEach((d) => {
-        list.push({ ...(d.data() as Client), id: d.id });
+        const data = d.data() as Client;
+        if (!data?.businessName && !data?.slug) return;
+        list.push({ ...data, id: d.id });
       });
 
       list.sort((a, b) => {
