@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
   createClientAccessHandler,
@@ -12,6 +13,23 @@ import {
   completeActivationHandler,
   toggleClientProfileStatusHandler
 } from './server/clientAccessController';
+
+function isAllowedCorsOrigin(origin: string, requestHost: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    const cleanHost = requestHost.split(':')[0].toLowerCase();
+
+    if (cleanHost && hostname === cleanHost) return true;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    if (hostname === 'taprd.com' || hostname.endsWith('.taprd.com')) return true;
+    if (hostname.endsWith('.run.app')) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -28,28 +46,17 @@ async function startServer() {
     res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.header('Permissions-Policy', 'camera=(), microphone=(), payment=()');
 
-    // 2. Control de CORS dinámico para TapRD
+    // 2. Control de CORS estricto para TapRD
     const origin = req.headers.origin;
     const host = req.get('host') || '';
 
-    // Permitir solicitudes del mismo origen o desarrollo
-    if (origin) {
-      if (
-        origin.includes(host) || 
-        origin.includes('localhost') || 
-        origin.includes('127.0.0.1') ||
-        origin.includes('run.app') ||
-        origin.includes('taprd.com')
-      ) {
-        res.header('Access-Control-Allow-Origin', origin);
-      }
-    } else {
-      res.header('Access-Control-Allow-Origin', '*');
+    if (origin && isAllowedCorsOrigin(origin, host)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+      res.header('Access-Control-Max-Age', '86400');
     }
-
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Max-Age', '86400');
 
     if (req.method === 'OPTIONS') {
       res.sendStatus(204);
@@ -91,9 +98,12 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Buscar carpeta dist de forma resiliente tanto en CWD como relativo a __dirname
-    const distPath = fs.existsSync(path.join(__dirname, 'index.html'))
+    // Buscar carpeta dist de forma resiliente tanto en CWD como relativo al archivo actual
+    const currentDir = typeof __dirname !== 'undefined'
       ? __dirname
+      : path.dirname(fileURLToPath(import.meta.url));
+    const distPath = fs.existsSync(path.join(currentDir, 'index.html'))
+      ? currentDir
       : path.join(process.cwd(), 'dist');
 
     app.use(express.static(distPath));

@@ -14,7 +14,7 @@ service firebase.storage {
       return isAuthenticated() && (
         ('email' in request.auth.token && (
           request.auth.token.email.lower() == 'wilsonabelinobrito@gmail.com' ||
-          request.auth.token.email.lower().matches('.*@taprd[.]com$')
+          (request.auth.token.email_verified == true && request.auth.token.email.lower().matches('.*@taprd[.]com$'))
         )) ||
         ('role' in request.auth.token && (
           request.auth.token.role == 'ADMIN' || 

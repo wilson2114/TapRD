@@ -58,11 +58,15 @@ export function getFirebaseAdmin() {
         try {
           serviceAccount = JSON.parse(serviceAccountEnv);
         } catch {
-          // Si el valor en la variable de entorno viene sin el contenedor exterior
-          const wrapped = serviceAccountEnv.trim().startsWith('{')
-            ? serviceAccountEnv
-            : `{ "private_key": ${serviceAccountEnv} "project_id": "taprd-16064" }`;
-          serviceAccount = JSON.parse(wrapped);
+          // Si el valor en la variable de entorno es solo la clave privada PEM
+          if (serviceAccountEnv.trim().startsWith('{')) {
+            serviceAccount = JSON.parse(serviceAccountEnv);
+          } else {
+            serviceAccount = {
+              private_key: serviceAccountEnv.replace(/\\n/g, '\n'),
+              project_id: process.env.VITE_FIREBASE_PROJECT_ID || 'taprd-16064'
+            };
+          }
         }
 
         adminApp = initializeApp({

@@ -21,7 +21,7 @@ service cloud.firestore {
         // Correo del administrador único / propietario de TapRD
         ('email' in request.auth.token && (
           request.auth.token.email.lower() == 'wilsonabelinobrito@gmail.com' ||
-          request.auth.token.email.lower().matches('.*@taprd[.]com$')
+          (request.auth.token.email_verified == true && request.auth.token.email.lower().matches('.*@taprd[.]com$'))
         )) ||
         // Rol en documento Firestore users/{uid}
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
@@ -58,19 +58,20 @@ service cloud.firestore {
       // ADMIN puede leer cualquier usuario; CLIENT solo puede leer su propio usuario
       allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
 
-      // Creación: ADMIN o durante activación de cuenta vinculada
+      // Creación: ADMIN o durante activación de cuenta vinculada (sin auto-asignar clientId arbitrario)
       allow create: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == userId && 
-        (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client')
+        (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client') &&
+        (!('clientId' in request.resource.data) || request.resource.data.clientId == null)
       );
 
-      // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o alterar clientId ya asignado)
+      // Actualización: ADMIN todo; CLIENT solo su perfil (prohibido cambiar de rol o alterar clientId)
       allow update: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == userId && 
         (request.resource.data.role == 'CLIENT' || request.resource.data.role == 'client') &&
-        (!('clientId' in resource.data) || resource.data.clientId == null || request.resource.data.clientId == resource.data.clientId)
+        (!('clientId' in request.resource.data) || request.resource.data.clientId == resource.data.clientId)
       );
 
       // Eliminación: solo ADMIN
@@ -88,15 +89,21 @@ service cloud.firestore {
       allow create: if isAdmin();
 
       // Actualización: ADMIN puede actualizar cualquier campo; CLIENT solo su propio negocio
-      // Permite también la actualización durante el flujo de activación o auto-vinculación legítima del cliente autenticado
+      // Permite vinculación legítima únicamente si el correo autenticado coincide con el cliente o ya era el userId asignado
       allow update: if isAdmin() || (
         // Flujo de activación y vinculación legítima por el propio usuario autenticado
         (
           isAuthenticated() &&
           (
-            request.auth.uid == request.resource.data.userId ||
-            ('email' in request.auth.token && 'clientEmail' in resource.data && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
-            ('email' in request.auth.token && 'email' in resource.data && resource.data.email.lower() == request.auth.token.email.lower())
+            (resource.data.userId == request.auth.uid) ||
+            (
+              (!('userId' in resource.data) || resource.data.userId == null || resource.data.userId.matches('client_.*')) &&
+              (
+                ('email' in request.auth.token && 'clientEmail' in resource.data && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
+                ('email' in request.auth.token && 'email' in resource.data && resource.data.email.lower() == request.auth.token.email.lower())
+              ) &&
+              request.resource.data.userId == request.auth.uid
+            )
           ) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'userId', 'clientEmail', 'active', 'status', 'accessStatus', 'updatedAt', 'activationToken',
@@ -189,14 +196,21 @@ service cloud.firestore {
     // COLECCIÓN: activations/{tokenId}
     // =========================================================================
     match /activations/{tokenId} {
-      // Lectura pública de tokens para verificación en /activar
-      allow read: if true;
+      // Solo lectura puntual por ID exacto del token (prohibido listar todos los tokens)
+      allow get: if true;
+      allow list: if isAdmin();
 
-      // Creación de tokens: permitida para administradores y para registro de activación
-      allow create: if true;
+      // Creación de tokens: reservada exclusivamente a administradores
+      allow create: if isAdmin();
 
-      // Actualización: marcar como usado durante la activación autorizada
-      allow update: if isAdmin() || (resource.data.used == false && request.resource.data.used == true);
+      // Actualización: solo ADMIN o el propio usuario autenticado marcando su token como usado
+      allow update: if isAdmin() || (
+        isAuthenticated() &&
+        resource.data.used == false &&
+        request.resource.data.used == true &&
+        request.resource.data.activatedUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedAt', 'activatedUid'])
+      );
 
       // Eliminación: solo ADMIN
       allow delete: if isAdmin();

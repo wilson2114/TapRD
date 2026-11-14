@@ -461,24 +461,29 @@ export async function suspendClientAccessHandler(req: Request, res: Response): P
     return;
   }
 
-  const { auth, db, isConfigured } = getFirebaseAdmin();
+  const { auth, db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !db) {
+    res.status(503).json({
+      error: 'Admin SDK sin credenciales de servicio.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
 
   try {
     let userId = '';
-    if (isConfigured && db) {
-      const clientDoc = await db.collection('clients').doc(clientId).get();
-      if (!clientDoc.exists) {
-        res.status(404).json({ error: 'Cliente no encontrado.' });
-        return;
-      }
-      userId = clientDoc.data()?.userId;
-
-      // Actualizar accessStatus a suspended en Firestore
-      await db.collection('clients').doc(clientId).update({
-        accessStatus: 'suspended',
-        updatedAt: new Date().toISOString()
-      });
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists) {
+      res.status(404).json({ error: 'Cliente no encontrado.' });
+      return;
     }
+    userId = clientDoc.data()?.userId;
+
+    // Actualizar accessStatus a suspended en Firestore
+    await db.collection('clients').doc(clientId).update({
+      accessStatus: 'suspended',
+      updatedAt: new Date().toISOString()
+    });
 
     // Opcionalmente deshabilitar usuario en Firebase Authentication (Regla 13)
     if (isConfigured && auth && userId) {
@@ -906,6 +911,20 @@ export async function batchVerifyClientAccessStatusesHandler(req: Request, res: 
  * Asigna la contraseña elegida en Firebase Authentication usando Admin SDK.
  */
 export async function completeActivationHandler(req: Request, res: Response): Promise<void> {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  const rateLimit = checkRateLimit(clientIp, {
+    windowMs: 60000,
+    maxRequests: 10,
+    action: 'completeActivation'
+  });
+
+  if (!rateLimit.allowed) {
+    res.status(429).json({
+      error: `Demasiados intentos de activación. Espera ${Math.ceil(rateLimit.retryAfterMs / 1000)} segundos.`
+    });
+    return;
+  }
+
   const rawToken = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
   const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
   if (!rawToken || !newPassword) {
@@ -928,59 +947,60 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
   }
 
   try {
-    // 1. Verificar token
-    let tokenData: any = null;
+    // 1. Verificar token exclusivamente contra el registro persistido en Firestore
     const actDoc = await db.collection('activations').doc(rawToken).get();
-    if (actDoc.exists) {
-      tokenData = actDoc.data();
-      if (tokenData.used) {
-        res.status(400).json({
-          error: 'Este enlace de activación ya fue utilizado previamente.',
-          code: 'TOKEN_ALREADY_USED'
-        });
-        return;
-      }
-      if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
-        res.status(400).json({
-          error: 'Este enlace de activación ha expirado. Solicita una nueva invitación.',
-          code: 'TOKEN_EXPIRED'
-        });
-        return;
-      }
-    } else {
-      // Intentar decodificar payload autosuficiente
-      const payload = decodeTokenPayload(rawToken);
-      if (payload && payload.c && payload.e) {
-        tokenData = {
-          clientId: payload.c,
-          email: payload.e,
-          businessName: payload.b,
-          expiresAt: payload.x
-        };
-        if (payload.x && Date.now() > payload.x) {
-          res.status(400).json({
-            error: 'Este enlace de activación ha expirado.',
-            code: 'TOKEN_EXPIRED'
-          });
-          return;
-        }
-      }
+    if (!actDoc.exists) {
+      res.status(400).json({ error: 'Enlace de activación inválido o no registrado.', code: 'TOKEN_INVALID' });
+      return;
     }
 
-    if (!tokenData || !tokenData.email || !tokenData.clientId) {
+    const tokenData = actDoc.data() || {};
+    if (tokenData.used) {
+      res.status(400).json({
+        error: 'Este enlace de activación ya fue utilizado previamente.',
+        code: 'TOKEN_ALREADY_USED'
+      });
+      return;
+    }
+    if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
+      res.status(400).json({
+        error: 'Este enlace de activación ha expirado. Solicita una nueva invitación.',
+        code: 'TOKEN_EXPIRED'
+      });
+      return;
+    }
+
+    if (!tokenData.email || !tokenData.clientId) {
       res.status(400).json({ error: 'Enlace de activación inválido.', code: 'TOKEN_INVALID' });
       return;
     }
 
-    const cleanEmail = tokenData.email.trim().toLowerCase();
-    const clientId = tokenData.clientId;
+    const cleanEmail = String(tokenData.email).trim().toLowerCase();
+    const clientId = String(tokenData.clientId);
     const nowIso = new Date().toISOString();
+
+    if (cleanEmail === 'wilsonabelinobrito@gmail.com' || cleanEmail.endsWith('@taprd.com')) {
+      res.status(403).json({
+        error: 'Este correo pertenece a una cuenta administrativa y no puede activarse por esta vía.',
+        code: 'TOKEN_INVALID'
+      });
+      return;
+    }
 
     const clientRef = db.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
     if (!clientSnap.exists) {
       res.status(400).json({
         error: 'El perfil comercial asociado a este enlace no existe o fue eliminado.',
+        code: 'TOKEN_INVALID'
+      });
+      return;
+    }
+
+    const clientData = clientSnap.data() || {};
+    if (clientData.activationToken && clientData.activationToken !== rawToken) {
+      res.status(400).json({
+        error: 'Este enlace de activación ha sido reemplazado por uno más reciente.',
         code: 'TOKEN_INVALID'
       });
       return;
@@ -994,6 +1014,21 @@ export async function completeActivationHandler(req: Request, res: Response): Pr
 
     let authUid = '';
     if (authUser) {
+      const existingRole = String(authUser.customClaims?.role || '').toLowerCase();
+      if (existingRole === 'admin' || existingRole === 'superadmin') {
+        res.status(403).json({
+          error: 'No está permitido modificar credenciales administrativas desde la activación de clientes.',
+          code: 'FORBIDDEN'
+        });
+        return;
+      }
+      if (clientData.userId && !String(clientData.userId).startsWith('client_') && clientData.userId !== authUser.uid) {
+        res.status(409).json({
+          error: 'El cliente ya está vinculado a otra cuenta de usuario.',
+          code: 'USER_MISMATCH'
+        });
+        return;
+      }
       authUid = authUser.uid;
       await auth.updateUser(authUid, {
         password: newPassword,
@@ -1093,26 +1128,32 @@ export async function toggleClientProfileStatusHandler(req: Request, res: Respon
     return;
   }
 
-  const { db, isConfigured } = getFirebaseAdmin();
+  const { db, isConfigured, hasServiceAccount } = getFirebaseAdmin();
+  if (!isConfigured || !hasServiceAccount || !db) {
+    res.status(503).json({
+      error: 'Admin SDK sin credenciales de servicio.',
+      code: 'ADMIN_SDK_UNAVAILABLE'
+    });
+    return;
+  }
+
   const nowIso = new Date().toISOString();
   const isActive = status === 'active';
   const profileStatus = status === 'inactive' ? 'inactive' : 'active';
 
   try {
-    if (isConfigured && db) {
-      const clientDoc = await db.collection('clients').doc(clientId).get();
-      if (!clientDoc.exists) {
-        res.status(404).json({ error: 'Cliente no encontrado.' });
-        return;
-      }
-
-      await db.collection('clients').doc(clientId).set({
-        status,
-        active: isActive,
-        profileStatus,
-        updatedAt: nowIso
-      }, { merge: true });
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists) {
+      res.status(404).json({ error: 'Cliente no encontrado.' });
+      return;
     }
+
+    await db.collection('clients').doc(clientId).set({
+      status,
+      active: isActive,
+      profileStatus,
+      updatedAt: nowIso
+    }, { merge: true });
 
     await logAuditEvent({
       actorUid: adminUser.uid,

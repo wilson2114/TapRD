@@ -148,13 +148,6 @@ export function initAuthObserver(): void {
           console.warn('Aviso sincronizando usuario con Firestore:', err);
         }
       } else {
-        // Si no hay usuario de Firebase activo, verificar si hay sesión demo explícita
-        const local = getStoredSession();
-        if (local && local.email === ADMIN_DEMO_EMAIL) {
-          cachedCurrentUser = local;
-          return;
-        }
-
         cachedCurrentUser = null;
         localStorage.removeItem(SESSION_STORAGE_KEY);
         localStorage.removeItem(CLIENT_SESSION_KEY);
