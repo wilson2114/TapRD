@@ -110,7 +110,10 @@ export function extractActivationParams(input: string): {
  * Construye la URL de activación canónica usando el origen actual del navegador.
  */
 export function buildActivationUrl(token: string, email?: string): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://taprd.com';
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://tap-rd.vercel.app';
   const cleanEmail = (email || '').trim().toLowerCase();
   const base = `${origin}/activar?token=${encodeURIComponent(token.trim())}`;
   return cleanEmail ? `${base}&email=${encodeURIComponent(cleanEmail)}` : base;

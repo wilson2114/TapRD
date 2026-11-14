@@ -8,10 +8,11 @@ export const WHATSAPP_NUMBER = "18090000000";
 
 /**
  * URL base pública para los perfiles digitales NFC.
- * NOTA: El dominio taprd.com es conceptual por ahora.
- * Permite cambiar fácilmente la URL base cuando se configure el dominio definitivo.
+ * Permite cambiar fácilmente la URL base mediante VITE_PUBLIC_BASE_URL cuando se configure un dominio personalizado.
  */
-export const PUBLIC_BASE_URL = "https://taprd.com";
+export const PUBLIC_BASE_URL =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PUBLIC_BASE_URL) ||
+  "https://tap-rd.vercel.app";
 
 /**
  * Correo oficial de referencia para el panel de administración.

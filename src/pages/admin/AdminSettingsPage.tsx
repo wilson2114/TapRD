@@ -85,7 +85,7 @@ export function AdminSettingsPage({ onNavigate }: AdminSettingsPageProps) {
                 className="w-full py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-mono focus:outline-hidden focus:border-blue-500"
               />
               <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                Por defecto: <code className="text-blue-600 font-bold">https://taprd.com</code> (conceptual durante la fase DEMO).
+                Por defecto: <code className="text-blue-600 font-bold">https://tap-rd.vercel.app</code> (configurable mediante <code className="text-slate-600 dark:text-slate-300">VITE_PUBLIC_BASE_URL</code>).
               </p>
             </div>
 

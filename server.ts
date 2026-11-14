@@ -23,6 +23,7 @@ function isAllowedCorsOrigin(origin: string, requestHost: string): boolean {
     if (cleanHost && hostname === cleanHost) return true;
     if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
     if (hostname === 'taprd.com' || hostname.endsWith('.taprd.com')) return true;
+    if (hostname === 'tap-rd.vercel.app') return true;
     if (hostname.endsWith('.run.app')) return true;
 
     return false;

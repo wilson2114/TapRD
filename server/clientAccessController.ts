@@ -21,7 +21,7 @@ function getRequestOrigin(req: Request): string {
   const forwardedProto = req.headers['x-forwarded-proto'];
   const proto = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(',')[0]?.trim() || req.protocol || 'https';
   const forwardedHost = req.headers['x-forwarded-host'];
-  const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost)?.split(',')[0]?.trim() || req.get('host') || 'taprd.com';
+  const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost)?.split(',')[0]?.trim() || req.get('host') || 'tap-rd.vercel.app';
   return `${proto}://${host}`;
 }
 
