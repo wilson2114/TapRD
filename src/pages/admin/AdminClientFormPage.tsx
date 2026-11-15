@@ -6,6 +6,7 @@ import { PUBLIC_BASE_URL, getWhatsAppUrl } from '../../config/constants';
 import { Client, ClientService, ClientStatus, ClientSettings, ClientSocialLinks, ClientDayHours, ClientProfileStatus } from '../../types';
 import { ProfileQRCode } from '../../components/admin/ProfileQRCode';
 import { ClientProfile } from '../../components/ClientProfile';
+import { ProtectedImage } from '../../components/ProtectedImage';
 import { 
   Save, 
   ArrowLeft, 
@@ -1491,7 +1492,7 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
             {/* Preview Box */}
             <div className="w-28 h-28 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center relative overflow-hidden shadow-inner shrink-0">
               {logo ? (
-                <img src={logo} alt="Logo" className="w-full h-full object-cover" />
+                <ProtectedImage wrapperClassName="w-full h-full" src={logo} alt="Logo" className="w-full h-full object-cover" />
               ) : (
                 <div className="text-center p-2">
                   <ImageIcon className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto mb-1" />
@@ -1681,9 +1682,12 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
               >
                 <div className="flex items-center gap-3">
                   {srv.imageUrl && (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
-                      <img src={srv.thumbnailUrl || srv.imageUrl} alt={srv.name} className="w-full h-full object-cover" />
-                    </div>
+                    <ProtectedImage
+                      wrapperClassName="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
+                      src={srv.thumbnailUrl || srv.imageUrl}
+                      alt={srv.name}
+                      className="w-full h-full object-cover"
+                    />
                   )}
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">

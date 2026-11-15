@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
+import { ProtectedImage } from '../../components/ProtectedImage';
 import { ClientService } from '../../types/client';
 import { 
   Plus, 
@@ -680,13 +681,12 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
                   /* Vista Previa de la Fotografía Aprobada */
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
                     <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 dark:border-slate-700 shrink-0">
-                        <img
-                          src={newServiceThumbUrl || newServiceImageUrl}
-                          alt="Vista previa"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                      <ProtectedImage
+                        wrapperClassName="w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 dark:border-slate-700 shrink-0"
+                        src={newServiceThumbUrl || newServiceImageUrl}
+                        alt="Vista previa"
+                        className="w-full h-full object-cover"
+                      />
                       <div className="text-left space-y-0.5">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                           <ShieldCheck className="w-4 h-4" />
@@ -920,13 +920,12 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
                         {editImageUrl ? (
                           <div className="flex items-center justify-between gap-3 p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-14 h-14 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 dark:border-slate-700 shrink-0">
-                                <img
-                                  src={editThumbUrl || editImageUrl}
-                                  alt="Preview"
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
+                              <ProtectedImage
+                                wrapperClassName="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 dark:border-slate-700 shrink-0"
+                                src={editThumbUrl || editImageUrl}
+                                alt="Preview"
+                                className="w-full h-full object-cover"
+                              />
                               <div className="text-left space-y-0.5">
                                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -1011,13 +1010,12 @@ export function ClientServicesPage({ onNavigate }: ClientServicesPageProps) {
                       
                       {/* Fotografía de servicio o placeholder */}
                       {srv.imageUrl ? (
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shrink-0 relative">
-                          <img
-                            src={srv.thumbnailUrl || srv.imageUrl}
-                            alt={srv.imageAlt || srv.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
+                        <ProtectedImage
+                          wrapperClassName="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shrink-0"
+                          src={srv.thumbnailUrl || srv.imageUrl}
+                          alt={srv.imageAlt || srv.name}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0">
                           <ImageIcon className="w-6 h-6" />

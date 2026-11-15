@@ -5,6 +5,7 @@ import { uploadClientLogo, deleteClientLogo, validateLogoFile } from '../../serv
 import { ClientProfile } from '../../components/ClientProfile';
 import { CITIES } from '../../data/dominicanCities';
 import { CitySelector } from '../../components/CitySelector';
+import { ProtectedImage } from '../../components/ProtectedImage';
 import { 
   Save, 
   Eye, 
@@ -254,10 +255,11 @@ export function ClientProfilePage({ onNavigate }: ClientProfilePageProps) {
           <div className="flex flex-col sm:flex-row items-center gap-6">
             {logo ? (
               <div className="relative group">
-                <img
+                <ProtectedImage
+                  wrapperClassName="w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-md"
                   src={logo}
                   alt={businessName}
-                  className="w-24 h-24 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-md"
+                  className="w-full h-full object-cover"
                 />
                 <button
                   type="button"

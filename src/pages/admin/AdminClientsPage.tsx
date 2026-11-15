@@ -6,6 +6,7 @@ import { batchVerifyClientAccessStatuses, reactivateClientAccess } from '../../s
 import { PUBLIC_BASE_URL, getWhatsAppUrl } from '../../config/constants';
 import { Client, ClientStatus } from '../../types';
 import { getProvinceByCity, normalizeLocationText } from '../../data/dominicanCities';
+import { ProtectedImage } from '../../components/ProtectedImage';
 import { 
   Plus, 
   Search, 
@@ -514,10 +515,11 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
                             {client.logo ? (
-                              <img
+                              <ProtectedImage
+                                wrapperClassName="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
                                 src={client.logo}
                                 alt={client.businessName}
-                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                                className="w-full h-full object-cover"
                               />
                             ) : (
                               <div className={`w-10 h-10 rounded-xl ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs`}>

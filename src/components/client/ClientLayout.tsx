@@ -25,6 +25,7 @@ import {
   Landmark
 } from 'lucide-react';
 import { PUBLIC_BASE_URL } from '../../config/constants';
+import { ProtectedImage } from '../ProtectedImage';
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -189,10 +190,11 @@ export function ClientLayout({
             {client && (
               <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
                 {client.logo ? (
-                  <img
+                  <ProtectedImage
+                    wrapperClassName="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0"
                     src={client.logo}
                     alt={client.businessName}
-                    className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className={`w-8 h-8 rounded-lg ${client.avatarBgColor || 'bg-blue-600'} text-white font-bold text-xs flex items-center justify-center`}>
@@ -238,10 +240,11 @@ export function ClientLayout({
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
               <div className="flex items-center gap-3">
                 {client.logo ? (
-                  <img
+                  <ProtectedImage
+                    wrapperClassName="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
                     src={client.logo}
                     alt={client.businessName}
-                    className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className={`w-11 h-11 rounded-xl ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-sm flex items-center justify-center shadow-2xs`}>

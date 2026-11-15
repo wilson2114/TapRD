@@ -207,10 +207,11 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
             <div className="px-6 pb-6 pt-0 relative">
               <div className="-mt-12 mb-3 flex items-end justify-between">
                 {client.logo ? (
-                  <img
+                  <ProtectedImage
+                    wrapperClassName="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 shadow-md bg-white dark:bg-slate-800"
                     src={client.logo}
                     alt={client.businessName}
-                    className="w-20 h-20 rounded-2xl object-cover border-4 border-white dark:border-slate-900 shadow-md bg-white dark:bg-slate-800"
+                    className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
