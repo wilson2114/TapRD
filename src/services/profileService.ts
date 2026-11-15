@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
@@ -176,7 +176,7 @@ export async function fetchClientAnalytics(
   const safeDays = maxDays === null ? 365 : Math.min(Math.max(1, maxDays), 365);
   const cutoffIso = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
   const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
-  const q = query(eventsRef, where('createdAt', '>=', cutoffIso), limit(5000));
+  const q = query(eventsRef, where('createdAt', '>=', cutoffIso), orderBy('createdAt', 'desc'), limit(5000));
   const snapshot = await getDocs(q);
 
   snapshot.forEach((docSnap) => {
