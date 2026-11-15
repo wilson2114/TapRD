@@ -74,6 +74,27 @@ async function startServer() {
       res.sendStatus(204);
       return;
     }
+
+    // 3. Protección CSRF para peticiones que modifican estado en /api/*
+    if (
+      req.path.startsWith('/api/') &&
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase())
+    ) {
+      const fetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+      if (origin && !isAllowedCorsOrigin(origin, host)) {
+        res.status(403).json({ error: 'Origen no autorizado (protección CSRF).' });
+        return;
+      }
+      if (!origin && req.headers.referer && !isAllowedCorsOrigin(req.headers.referer, host)) {
+        res.status(403).json({ error: 'Referer no autorizado (protección CSRF).' });
+        return;
+      }
+      if (fetchSite === 'cross-site' && (!origin || !isAllowedCorsOrigin(origin, host))) {
+        res.status(403).json({ error: 'Solicitud cross-site bloqueada (protección CSRF).' });
+        return;
+      }
+    }
+
     next();
   });
 

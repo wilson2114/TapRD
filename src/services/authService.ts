@@ -735,14 +735,26 @@ export async function getCurrentClient(): Promise<Client | null> {
     } catch {}
   }
 
-  // En producción con Firebase configurado, exigir sesión real de Firebase Auth
-  if (isFirebaseConfigured && !import.meta.env.DEV && !auth.currentUser) {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem(CLIENT_SESSION_KEY);
-      } catch {}
+  // En producción con Firebase configurado, exigir sesión real de Firebase Auth y expiración máxima (12h)
+  if (isFirebaseConfigured && !import.meta.env.DEV) {
+    if (!auth.currentUser) {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(CLIENT_SESSION_KEY);
+        } catch {}
+      }
+      return null;
     }
-    return null;
+
+    try {
+      const tokenResult = await auth.currentUser.getIdTokenResult();
+      const authTimeMs = tokenResult?.authTime ? new Date(tokenResult.authTime).getTime() : 0;
+      const MAX_SESSION_MS = 12 * 60 * 60 * 1000;
+      if (authTimeMs && Date.now() - authTimeMs > MAX_SESSION_MS) {
+        await logoutClient();
+        return null;
+      }
+    } catch {}
   }
 
   // 1. Revisar si hay sesión activa en localStorage que corresponda al usuario autenticado
