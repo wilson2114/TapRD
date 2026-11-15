@@ -28,6 +28,7 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
   const [statsError, setStatsError] = useState<string | null>(null);
 
   const maxDaysLimit = client ? getLimit(client, 'maxAnalyticsDays') : 30;
+  const hasAdvanced = canUseFeature(client, 'advancedAnalytics', { checkSubscriptionActive: true });
 
   useEffect(() => {
     if (!client?.id) return;
@@ -35,7 +36,7 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
     setLoadingStats(true);
     setStatsError(null);
 
-    fetchClientAnalytics(client.id, maxDaysLimit)
+    fetchClientAnalytics(client.id, maxDaysLimit, hasAdvanced)
       .then((summary) => {
         if (active) setRemoteStats(summary);
       })
@@ -52,11 +53,9 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
     return () => {
       active = false;
     };
-  }, [client?.id, maxDaysLimit]);
+  }, [client?.id, maxDaysLimit, hasAdvanced]);
 
   if (!client) return null;
-
-  const hasAdvanced = canUseFeature(client, 'advancedAnalytics', { checkSubscriptionActive: true });
 
   const totalViews = Math.max(client.viewsCount ?? 0, remoteStats?.totalViews ?? 0);
   const whatsappClicks = remoteStats?.whatsappClicks ?? 0;

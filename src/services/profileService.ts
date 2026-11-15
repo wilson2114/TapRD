@@ -151,7 +151,8 @@ export function trackAnalyticsEvent(
  */
 export async function fetchClientAnalytics(
   clientId: string,
-  maxDays: number | null = 30
+  maxDays: number | null = 30,
+  includeAdvanced: boolean = true
 ): Promise<ClientAnalyticsSummary> {
   const summary: ClientAnalyticsSummary = {
     totalViews: 0,
@@ -184,9 +185,11 @@ export async function fetchClientAnalytics(
     const type = data.type as AnalyticsEventType;
     const device = data.device as AnalyticsDeviceType;
 
-    if (device === 'ios') summary.iosCount++;
-    else if (device === 'android') summary.androidCount++;
-    else if (device === 'desktop') summary.desktopCount++;
+    if (includeAdvanced) {
+      if (device === 'ios') summary.iosCount++;
+      else if (device === 'android') summary.androidCount++;
+      else if (device === 'desktop') summary.desktopCount++;
+    }
 
     switch (type) {
       case 'profileView':
@@ -197,29 +200,29 @@ export async function fetchClientAnalytics(
       case 'whatsappClick':
         summary.whatsappClicks++;
         break;
-      case 'phoneClick':
-        summary.phoneClicks++;
-        break;
       case 'vcardDownload':
         summary.vcardDownloads++;
         break;
+      case 'phoneClick':
+        if (includeAdvanced) summary.phoneClicks++;
+        break;
       case 'instagramClick':
-        summary.instagramClicks++;
+        if (includeAdvanced) summary.instagramClicks++;
         break;
       case 'facebookClick':
-        summary.facebookClicks++;
+        if (includeAdvanced) summary.facebookClicks++;
         break;
       case 'tiktokClick':
-        summary.tiktokClicks++;
+        if (includeAdvanced) summary.tiktokClicks++;
         break;
       case 'websiteClick':
-        summary.websiteClicks++;
+        if (includeAdvanced) summary.websiteClicks++;
         break;
       case 'reviewClick':
-        summary.reviewClicks++;
+        if (includeAdvanced) summary.reviewClicks++;
         break;
       case 'directionsClick':
-        summary.directionsClicks++;
+        if (includeAdvanced) summary.directionsClicks++;
         break;
     }
   });
