@@ -304,6 +304,15 @@ function readPublicSlugCache(cleanSlug: string): Client | null {
   }
 }
 
+export function getCachedClientBySlug(slug: string): Client | null {
+  const cleanSlug = slug.trim().toLowerCase();
+  return (
+    readPublicSlugCache(cleanSlug) ||
+    inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug) ||
+    null
+  );
+}
+
 export async function getClientBySlug(slug: string): Promise<Client | null> {
   const cleanSlug = slug.trim().toLowerCase();
   const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;

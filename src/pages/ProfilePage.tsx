@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getClientBySlug, fetchClientBySlug, getPublicClientData, incrementClientViews } from '../services/clientService';
+import { getCachedClientBySlug, fetchClientBySlug, getPublicClientData, incrementClientViews } from '../services/clientService';
 import { trackAnalyticsEvent } from '../services/profileService';
 import { ClientProfile } from '../components/ClientProfile';
 import { DigitalProfile } from '../components/DigitalProfile';
@@ -17,18 +17,28 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
   // Normalizar el slug solicitado
   const cleanSlug = slug.toLowerCase().replace(/^\/p\//, '').replace(/^\/demo\//, '').trim();
 
-  const [client, setClient] = useState<Client | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [client, setClient] = useState<Client | null>(() => getCachedClientBySlug(cleanSlug));
+  const [isLoading, setIsLoading] = useState<boolean>(() => !getCachedClientBySlug(cleanSlug));
 
-  // Consultar en Cloud Firestore o memoria
+  // Stale-while-revalidate: mostrar caché al instante y refrescar en segundo plano desde Firestore
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
+    const cached = getCachedClientBySlug(cleanSlug);
+    if (cached) {
+      setClient(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
 
     fetchClientBySlug(cleanSlug)
       .then((fetched) => {
         if (isMounted) {
-          setClient(fetched);
+          if (fetched) {
+            setClient(fetched);
+          } else if (!cached) {
+            setClient(null);
+          }
           setIsLoading(false);
           if (fetched && fetched.status === 'active' && fetched.profileStatus !== 'inactive' && fetched.active !== false) {
             incrementClientViews(fetched.id);

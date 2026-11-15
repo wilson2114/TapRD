@@ -51,21 +51,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navegación SPA (/p/:slug, etc.): Network-First con fallback a /index.html cacheado
+  // 1. Navegación SPA (/p/:slug, etc.): Stale-While-Revalidate si ya hay App Shell cacheado
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
-          }
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match('/index.html');
-          return cached || caches.match('/');
-        })
+      caches.match('/index.html').then((cached) => {
+        const networkFetch = fetch(request)
+          .then((response) => {
+            if (response && response.ok) {
+              const copy = response.clone();
+              caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+            }
+            return response;
+          })
+          .catch(() => cached || caches.match('/'));
+
+        return cached || networkFetch;
+      })
     );
     return;
   }
