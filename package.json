@@ -14,7 +14,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:theme": "tsx scripts/test-theme.ts",
-    "test:security": "tsx scripts/test-image-security.ts"
+    "test:security": "tsx scripts/test-image-security.ts",
+    "test:analytics": "tsx scripts/test-analytics-access.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
