@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClientAuth } from '../../hooks/useClientAuth';
 import { ThemeToggle } from '../ThemeToggle';
 import { 
@@ -46,6 +46,14 @@ export function ClientLayout({
 }: ClientLayoutProps) {
   const { client, logout } = useClientAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = title ? `${title} | Panel TapRD` : 'Panel de Cliente | TapRD';
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [title]);
 
   const navItems = [
     {

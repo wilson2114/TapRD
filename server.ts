@@ -47,7 +47,16 @@ async function startServer() {
     // 1. Headers de protección estándar
     res.header('X-Content-Type-Options', 'nosniff');
     res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.header('Permissions-Policy', 'camera=(), microphone=(), payment=()');
+    res.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.header(
+      'Content-Security-Policy-Report-Only',
+      "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://vitals.vercel-insights.com https://va.vercel-scripts.com;"
+    );
+
+    if (req.path === '/cliente' || req.path.startsWith('/cliente/')) {
+      res.header('X-Robots-Tag', 'noindex, nofollow');
+    }
 
     // 2. Control de CORS estricto para TapRD
     const origin = req.headers.origin;
