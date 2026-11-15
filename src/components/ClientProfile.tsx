@@ -7,6 +7,7 @@ import { SEOHead } from './SEOHead';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemeToggle } from './ThemeToggle';
 import { ClientBankAccountsSection } from './ClientBankAccountsSection';
+import { ProtectedImage } from './ProtectedImage';
 import { 
   Phone, 
   MessageCircle, 
@@ -397,17 +398,17 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                       >
                         {/* Fotografía de servicio (si está disponible y aprobada) */}
                         {hasValidPhoto && (
-                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/80 shrink-0 relative group">
-                            <img
-                              src={photoSrc}
-                              alt={altText}
-                              loading="lazy"
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                              onError={(e) => {
-                                (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          </div>
+                          <ProtectedImage
+                            wrapperClassName="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/80 shrink-0 group"
+                            src={photoSrc}
+                            alt={altText}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            onImageError={(e) => {
+                              const wrapper = e.currentTarget.parentElement;
+                              if (wrapper) wrapper.style.display = 'none';
+                            }}
+                          />
                         )}
 
                         <div className="space-y-0.5 flex-1 min-w-0">
