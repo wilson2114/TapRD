@@ -1363,9 +1363,14 @@ export async function trackPublicAnalyticsHandler(req: Request, res: Response): 
   }
 
   const { clientId, type, device, source } = parsed.data;
-  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  const rawIp = req.ip || req.socket.remoteAddress || 'unknown';
+  const ipHash = crypto
+    .createHash('sha256')
+    .update(`${rawIp}:${process.env.ANALYTICS_IP_SALT || 'taprd-ephemeral-salt'}`)
+    .digest('hex')
+    .slice(0, 16);
 
-  const ipLimit = checkRateLimit(`track:ip:${clientIp}`, {
+  const ipLimit = checkRateLimit(`track:ip:${ipHash}`, {
     windowMs: 60000,
     maxRequests: 120,
     action: 'trackAnalyticsIp'
@@ -1375,7 +1380,7 @@ export async function trackPublicAnalyticsHandler(req: Request, res: Response): 
     return;
   }
 
-  const pairLimit = checkRateLimit(`track:${clientIp}:${clientId}`, {
+  const pairLimit = checkRateLimit(`track:${ipHash}:${clientId}`, {
     windowMs: 60000,
     maxRequests: 30,
     action: 'trackAnalyticsClient'
@@ -1398,10 +1403,13 @@ export async function trackPublicAnalyticsHandler(req: Request, res: Response): 
       return;
     }
 
+    const nowMs = Date.now();
+    const RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
     const eventPayload: Record<string, string> = {
       type,
       device,
-      createdAt: new Date().toISOString()
+      createdAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + RETENTION_MS).toISOString()
     };
     if (source) {
       eventPayload.source = source;

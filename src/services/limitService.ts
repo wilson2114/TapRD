@@ -4,6 +4,9 @@ import { DEFAULT_PLANS } from '../config/plans';
 
 export type LimitKey = 'maxServices' | 'maxSocialLinks' | 'maxTeamMembers' | 'maxAnalyticsDays' | 'maxProfiles';
 
+/** Retención máxima global de eventos de analítica (365 días). */
+export const MAX_ANALYTICS_RETENTION_DAYS = 365;
+
 /**
  * Obtener los límites configurados para el plan del cliente
  */
