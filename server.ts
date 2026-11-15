@@ -12,7 +12,8 @@ import {
   batchVerifyClientAccessStatusesHandler,
   completeActivationHandler,
   toggleClientProfileStatusHandler,
-  getClientAnalyticsHandler
+  getClientAnalyticsHandler,
+  trackPublicAnalyticsHandler
 } from './server/clientAccessController';
 
 function isAllowedCorsOrigin(origin: string, requestHost: string): boolean {
@@ -82,9 +83,10 @@ async function startServer() {
   app.post('/api/admin/client-access/batch-verify-status', batchVerifyClientAccessStatusesHandler);
   app.post('/api/admin/clients/toggle-status', toggleClientProfileStatusHandler);
 
-  // Endpoint de activación segura de clientes y analytics autenticado
+  // Endpoint de activación segura de clientes y analytics
   app.post('/api/client/complete-activation', completeActivationHandler);
   app.get('/api/client/analytics', getClientAnalyticsHandler);
+  app.post('/api/public/analytics/track', trackPublicAnalyticsHandler);
 
   // Garantía: Si alguna ruta /api/* no coincide, devolver siempre JSON y nunca HTML
   app.all('/api/*', (req, res) => {

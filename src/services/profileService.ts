@@ -3,6 +3,7 @@ import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
 import { recordInteraction, InteractionType } from '../utils/analytics';
+import { trackAnalyticsPayloadSchema } from '../schemas/analyticsSchema';
 
 const RECENT_EVENT_TIMESTAMPS = new Map<string, number>();
 const EVENT_COOLDOWN_MS = 4000;
@@ -121,28 +122,54 @@ export function trackAnalyticsEvent(
 ): void {
   if (!clientId || clientId === 'preview-temp') return;
 
+  const validated = trackAnalyticsPayloadSchema.safeParse({
+    clientId,
+    type: eventType,
+    device: detectDeviceType()
+  });
+  if (!validated.success) return;
+
   // Evitar duplicados rápidos o spam accidental en la misma sesión
-  const dedupeKey = `${clientId}:${eventType}`;
+  const dedupeKey = `${validated.data.clientId}:${validated.data.type}`;
   const now = Date.now();
   const lastAt = RECENT_EVENT_TIMESTAMPS.get(dedupeKey) || 0;
   if (now - lastAt < EVENT_COOLDOWN_MS) return;
   RECENT_EVENT_TIMESTAMPS.set(dedupeKey, now);
 
   if (slug) {
-    recordInteraction(slug, mapToLocalInteraction(eventType));
+    recordInteraction(slug, mapToLocalInteraction(validated.data.type));
   }
 
-  if (!isFirebaseConfigured || !db) return;
-
-  const payload = {
-    type: eventType,
-    device: detectDeviceType(),
-    createdAt: new Date().toISOString()
+  const writeFirestoreFallback = () => {
+    if (!isFirebaseConfigured || !db) return;
+    addDoc(collection(db, 'clients', validated.data.clientId, 'analytics_events'), {
+      type: validated.data.type,
+      device: validated.data.device,
+      createdAt: new Date().toISOString()
+    }).catch((err) => {
+      console.warn('[Analytics] No se pudo registrar el evento en Firestore:', err?.code || err?.message || err);
+    });
   };
 
-  addDoc(collection(db, 'clients', clientId, 'analytics_events'), payload).catch((err) => {
-    console.warn('[Analytics] No se pudo registrar el evento en Firestore:', err?.code || err?.message || err);
-  });
+  if (typeof fetch !== 'undefined') {
+    fetch('/api/public/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validated.data),
+      keepalive: true
+    })
+      .then((res) => {
+        if (res.status === 404 || res.status === 503) {
+          writeFirestoreFallback();
+        }
+      })
+      .catch(() => {
+        writeFirestoreFallback();
+      });
+    return;
+  }
+
+  writeFirestoreFallback();
 }
 
 /**

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { getFirebaseAdmin } from './firebaseAdmin';
 import { checkRateLimit } from './rateLimiter';
 import { logAuditEvent } from './auditService';
+import { trackAnalyticsPayloadSchema } from '../src/schemas/analyticsSchema';
 
 // Validación estricta de formato de correo electrónico
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -1332,5 +1333,87 @@ export async function getClientAnalyticsHandler(req: Request, res: Response): Pr
     res.status(401).json({ error: 'Sesión inválida o expirada.' });
   }
 }
+
+/**
+ * 10. trackPublicAnalyticsHandler
+ * Registra taps/visitas públicos con validación de esquema Zod, límite de tamaño (4KB)
+ * y rate limit por IP e IP+clientId.
+ */
+export async function trackPublicAnalyticsHandler(req: Request, res: Response): Promise<void> {
+  const rawContentLength = Number(req.headers['content-length'] || 0);
+  if (rawContentLength > 4096) {
+    res.status(413).json({ error: 'Payload demasiado grande (máximo 4KB).' });
+    return;
+  }
+
+  try {
+    if (Buffer.byteLength(JSON.stringify(req.body ?? {}), 'utf8') > 4096) {
+      res.status(413).json({ error: 'Payload demasiado grande (máximo 4KB).' });
+      return;
+    }
+  } catch {
+    res.status(400).json({ error: 'Cuerpo de solicitud inválido.' });
+    return;
+  }
+
+  const parsed = trackAnalyticsPayloadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Datos de evento inválidos.' });
+    return;
+  }
+
+  const { clientId, type, device, source } = parsed.data;
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+
+  const ipLimit = checkRateLimit(`track:ip:${clientIp}`, {
+    windowMs: 60000,
+    maxRequests: 120,
+    action: 'trackAnalyticsIp'
+  });
+  if (!ipLimit.allowed) {
+    res.status(429).json({ error: 'Demasiadas solicitudes de analítica. Intenta más tarde.' });
+    return;
+  }
+
+  const pairLimit = checkRateLimit(`track:${clientIp}:${clientId}`, {
+    windowMs: 60000,
+    maxRequests: 30,
+    action: 'trackAnalyticsClient'
+  });
+  if (!pairLimit.allowed) {
+    res.status(429).json({ error: 'Límite de frecuencia alcanzado para este perfil.' });
+    return;
+  }
+
+  const { db, isConfigured } = getFirebaseAdmin();
+  if (!isConfigured || !db) {
+    res.status(503).json({ error: 'Backend Firebase Admin no configurado.' });
+    return;
+  }
+
+  try {
+    const clientDoc = await db.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists || clientDoc.data()?.status === 'inactive') {
+      res.status(404).json({ error: 'Perfil no disponible.' });
+      return;
+    }
+
+    const eventPayload: Record<string, string> = {
+      type,
+      device,
+      createdAt: new Date().toISOString()
+    };
+    if (source) {
+      eventPayload.source = source;
+    }
+
+    await db.collection('clients').doc(clientId).collection('analytics_events').add(eventPayload);
+    res.status(201).json({ success: true });
+  } catch (err: any) {
+    console.warn('[PublicAnalytics] Error registrando evento:', err?.message || err);
+    res.status(500).json({ error: 'No se pudo registrar el evento.' });
+  }
+}
+
 
 
