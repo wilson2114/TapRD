@@ -1,5 +1,5 @@
 import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../lib/firebase';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
 import { recordInteraction, InteractionType } from '../utils/analytics';
@@ -170,7 +170,40 @@ export async function fetchClientAnalytics(
     desktopCount: 0
   };
 
-  if (!isFirebaseConfigured || !db || !clientId) {
+  if (!clientId) {
+    return summary;
+  }
+
+  // Intentar primero el endpoint autenticado del servidor (resuelve clientId desde el token, sin IDOR)
+  if (auth?.currentUser) {
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/client/analytics', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.summary) {
+          return data.summary as ClientAnalyticsSummary;
+        }
+      } else if (response.status === 401 || response.status === 403) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody?.error || 'Sesión no autorizada para consultar analytics.');
+      }
+      // 404 / 503 (e.g. despliegue estático sin Express): continuar al respaldo protegido por Firestore Rules
+    } catch (err: any) {
+      if (err?.message?.includes('Sesión no autorizada') || err?.message?.includes('suspendido')) {
+        throw err;
+      }
+      // Error de red o servidor no disponible: continuar al respaldo protegido por Firestore Rules
+    }
+  }
+
+  if (!isFirebaseConfigured || !db) {
     return summary;
   }
 

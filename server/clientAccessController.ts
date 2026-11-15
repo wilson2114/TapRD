@@ -1179,3 +1179,158 @@ export async function toggleClientProfileStatusHandler(req: Request, res: Respon
   }
 }
 
+/**
+ * 9. getClientAnalyticsHandler
+ * Endpoint autenticado para /cliente/analytics.
+ * Resuelve el negocio EXCLUSIVAMENTE desde el token de sesión (uid/email),
+ * nunca desde un clientId enviado por el cliente (prevención de IDOR).
+ */
+export async function getClientAnalyticsHandler(req: Request, res: Response): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Sesión requerida para consultar métricas.' });
+    return;
+  }
+
+  const token = authHeader.split('Bearer ')[1]?.trim();
+  if (!token) {
+    res.status(401).json({ error: 'Token de sesión inválido.' });
+    return;
+  }
+
+  const { auth, db, isConfigured } = getFirebaseAdmin();
+  if (!isConfigured || !auth || !db) {
+    res.status(503).json({ error: 'Backend Firebase Admin no configurado.' });
+    return;
+  }
+
+  try {
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+    const email = (decoded.email || '').trim().toLowerCase();
+
+    // Resolver clientId únicamente desde el usuario autenticado
+    let clientId: string | null = (decoded.clientId as string) || null;
+    if (!clientId) {
+      const userSnap = await db.collection('users').doc(uid).get();
+      if (userSnap.exists) {
+        clientId = (userSnap.data()?.clientId as string) || null;
+      }
+    }
+
+    let clientDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    if (clientId) {
+      const snap = await db.collection('clients').doc(clientId).get();
+      if (snap.exists) clientDoc = snap;
+    }
+
+    if (!clientDoc) {
+      const byUid = await db.collection('clients').where('userId', '==', uid).limit(1).get();
+      if (!byUid.empty) clientDoc = byUid.docs[0];
+    }
+
+    if (!clientDoc && email) {
+      const byEmail = await db.collection('clients').where('clientEmail', '==', email).limit(1).get();
+      if (!byEmail.empty) clientDoc = byEmail.docs[0];
+    }
+
+    if (!clientDoc || !clientDoc.exists) {
+      res.status(404).json({ error: 'No se encontró un negocio vinculado a tu sesión.' });
+      return;
+    }
+
+    const clientData = clientDoc.data() || {};
+    if (clientData.accessStatus === 'suspended') {
+      res.status(403).json({ error: 'Acceso al portal suspendido.' });
+      return;
+    }
+
+    const plan = String(clientData.plan || 'starter').toLowerCase();
+    const subStatus = String(clientData.subscriptionStatus || 'active').toLowerCase();
+    const isSubActive = !['suspended', 'canceled', 'expired'].includes(subStatus) &&
+      (!clientData.subscriptionExpiresAt || new Date(clientData.subscriptionExpiresAt).getTime() > Date.now());
+
+    const includeAdvanced = isSubActive && (plan === 'business' || plan === 'pro');
+    const maxDays = plan === 'pro' ? 365 : plan === 'business' ? 90 : 30;
+    const cutoffIso = new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const eventsSnap = await db
+      .collection('clients')
+      .doc(clientDoc.id)
+      .collection('analytics_events')
+      .where('createdAt', '>=', cutoffIso)
+      .orderBy('createdAt', 'desc')
+      .limit(5000)
+      .get();
+
+    const summary = {
+      totalViews: 0,
+      whatsappClicks: 0,
+      phoneClicks: 0,
+      vcardDownloads: 0,
+      instagramClicks: 0,
+      facebookClicks: 0,
+      tiktokClicks: 0,
+      websiteClicks: 0,
+      reviewClicks: 0,
+      directionsClicks: 0,
+      iosCount: 0,
+      androidCount: 0,
+      desktopCount: 0
+    };
+
+    for (const docSnap of eventsSnap.docs) {
+      const data = docSnap.data();
+      const type = data.type as string;
+      const device = data.device as string;
+
+      if (includeAdvanced) {
+        if (device === 'ios') summary.iosCount++;
+        else if (device === 'android') summary.androidCount++;
+        else if (device === 'desktop') summary.desktopCount++;
+      }
+
+      switch (type) {
+        case 'profileView':
+        case 'nfcScan':
+        case 'qrScan':
+          summary.totalViews++;
+          break;
+        case 'whatsappClick':
+          summary.whatsappClicks++;
+          break;
+        case 'vcardDownload':
+          summary.vcardDownloads++;
+          break;
+        case 'phoneClick':
+          if (includeAdvanced) summary.phoneClicks++;
+          break;
+        case 'instagramClick':
+          if (includeAdvanced) summary.instagramClicks++;
+          break;
+        case 'facebookClick':
+          if (includeAdvanced) summary.facebookClicks++;
+          break;
+        case 'tiktokClick':
+          if (includeAdvanced) summary.tiktokClicks++;
+          break;
+        case 'websiteClick':
+          if (includeAdvanced) summary.websiteClicks++;
+          break;
+        case 'reviewClick':
+          if (includeAdvanced) summary.reviewClicks++;
+          break;
+        case 'directionsClick':
+          if (includeAdvanced) summary.directionsClicks++;
+          break;
+      }
+    }
+
+    res.status(200).json({ summary, plan, maxDays, hasAdvanced: includeAdvanced });
+  } catch (err: any) {
+    console.warn('[ClientAnalytics] Error autenticando/consultando analytics:', err?.message || err);
+    res.status(401).json({ error: 'Sesión inválida o expirada.' });
+  }
+}
+
+
