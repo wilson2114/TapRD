@@ -404,10 +404,6 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                             alt={altText}
                             loading="lazy"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            onImageError={(e) => {
-                              const wrapper = e.currentTarget.parentElement;
-                              if (wrapper) wrapper.style.display = 'none';
-                            }}
                           />
                         )}
 

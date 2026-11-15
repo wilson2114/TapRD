@@ -1,30 +1,63 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
-interface ProtectedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface ProtectedImageProps {
+  src?: string;
+  alt?: string;
   wrapperClassName?: string;
-  onImageError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  className?: string;
+  loading?: 'lazy' | 'eager';
+  referrerPolicy?: React.HTMLAttributeReferrerPolicy;
+  style?: React.CSSProperties;
+  onImageError?: () => void;
 }
 
 /**
  * Imagen protegida contra descarga casual:
- * - Bloquea clic derecho / menú contextual
- * - Bloquea arrastrar y soltar
- * - Bloquea pulsación larga en móviles (iOS/Android -webkit-touch-callout)
- * - Coloca una capa transparente encima para interceptar interacciones sobre el <img>
+ * - No renderiza etiqueta <img> en el DOM (usa background-image en <div>) para que
+ *   navegadores móviles (iOS/Android) y de escritorio no muestren "Guardar imagen".
+ * - Bloquea clic derecho / menú contextual, arrastrar y selección.
+ * - Coloca una capa transparente protectora encima.
  */
 export function ProtectedImage({
+  src,
+  alt = '',
   wrapperClassName = '',
   className = '',
-  onImageError,
-  alt,
-  ...imgProps
+  style,
+  onImageError
 }: ProtectedImageProps) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+    if (!src) return;
+
+    let cancelled = false;
+    const probe = new Image();
+    probe.onerror = () => {
+      if (!cancelled) {
+        setHasError(true);
+        onImageError?.();
+      }
+    };
+    probe.src = src;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, onImageError]);
+
+  if (!src || hasError) return null;
+
   const blockEvent = (e: React.SyntheticEvent) => {
     e.preventDefault();
+    e.stopPropagation();
   };
 
   return (
     <div
+      role="img"
+      aria-label={alt}
       className={`relative select-none overflow-hidden ${wrapperClassName}`}
       onContextMenu={blockEvent}
       onDragStart={blockEvent}
@@ -34,19 +67,14 @@ export function ProtectedImage({
         userSelect: 'none'
       }}
     >
-      <img
-        {...imgProps}
-        alt={alt}
-        draggable={false}
-        onContextMenu={blockEvent}
-        onDragStart={blockEvent}
-        onError={onImageError}
-        className={`pointer-events-none select-none ${className}`}
+      <div
+        className={`w-full h-full bg-cover bg-center pointer-events-none select-none ${className}`}
         style={{
+          backgroundImage: `url("${src.replace(/"/g, '\\"')}")`,
           WebkitTouchCallout: 'none',
           WebkitUserSelect: 'none',
           userSelect: 'none',
-          ...imgProps.style
+          ...style
         }}
       />
       {/* Capa transparente protectora para interceptar clic derecho y pulsación larga */}

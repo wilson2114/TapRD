@@ -42,10 +42,6 @@ export function ServiceList({ services, onSelectService, currency = 'RD$' }: Ser
                 alt={service.imageAlt || service.name}
                 loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                onImageError={(e) => {
-                  const wrapper = e.currentTarget.parentElement;
-                  if (wrapper) wrapper.style.display = 'none';
-                }}
               />
             )}
 
