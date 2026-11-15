@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 import appletConfigJson from '../../firebase-applet-config.json';
@@ -74,12 +74,22 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 // Firebase Authentication
 export const auth = getAuth(app);
 
-// Cloud Firestore con soporte de base de datos '(default)'
+// Cloud Firestore con soporte de base de datos '(default)' y auto-detección de long polling
 const databaseId = resolveDatabaseId();
 
-export const db = (databaseId && databaseId !== '(default)')
-  ? getFirestore(app, databaseId)
-  : getFirestore(app);
+function createFirestoreInstance() {
+  try {
+    return (databaseId && databaseId !== '(default)')
+      ? initializeFirestore(app, { experimentalAutoDetectLongPolling: true }, databaseId)
+      : initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    return (databaseId && databaseId !== '(default)')
+      ? getFirestore(app, databaseId)
+      : getFirestore(app);
+  }
+}
+
+export const db = createFirestoreInstance();
 
 // Firebase Storage para logotipos y recursos multimedia
 export const storage = getStorage(app);

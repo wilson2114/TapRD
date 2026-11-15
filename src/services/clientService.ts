@@ -731,7 +731,12 @@ export async function updateClientByOwner(
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
       const cleanedUpdates = cleanForFirestore(safeUpdates);
-      await updateDoc(docRef, cleanedUpdates as Record<string, any>);
+      await Promise.race([
+        updateDoc(docRef, cleanedUpdates as Record<string, any>),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Tiempo de espera agotado al conectar con Firestore. Verifica tu conexión e intenta de nuevo.')), 15000)
+        )
+      ]);
     } catch (err: any) {
       console.error(`Error actualizando cliente ${id} (propietario) en Firestore:`, err);
       const isPermError = err?.code === 'permission-denied' ||

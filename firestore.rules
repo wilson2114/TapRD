@@ -46,8 +46,8 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientId == clientId) ||
         (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
-        (resource != null && 'clientEmail' in resource.data && 'email' in request.auth.token && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
-        (resource != null && 'email' in resource.data && 'email' in request.auth.token && resource.data.email.lower() == request.auth.token.email.lower())
+        (resource != null && 'clientEmail' in resource.data && resource.data.clientEmail is string && 'email' in request.auth.token && resource.data.clientEmail.lower() == request.auth.token.email.lower()) ||
+        (resource != null && 'email' in resource.data && resource.data.email is string && 'email' in request.auth.token && resource.data.email.lower() == request.auth.token.email.lower())
       );
     }
 
