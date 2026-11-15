@@ -729,19 +729,36 @@ export async function logoutClient(): Promise<void> {
  * OBTENER EL NEGOCIO ACTUAL DEL CLIENTE (getCurrentClient)
  */
 export async function getCurrentClient(): Promise<Client | null> {
-  // 1. Revisar si hay sesión activa en localStorage
+  if (isFirebaseConfigured && typeof (auth as any).authStateReady === 'function') {
+    try {
+      await (auth as any).authStateReady();
+    } catch {}
+  }
+
+  // En producción con Firebase configurado, exigir sesión real de Firebase Auth
+  if (isFirebaseConfigured && !import.meta.env.DEV && !auth.currentUser) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(CLIENT_SESSION_KEY);
+      } catch {}
+    }
+    return null;
+  }
+
+  // 1. Revisar si hay sesión activa en localStorage que corresponda al usuario autenticado
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(CLIENT_SESSION_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Client;
         if (parsed && parsed.id) {
-          // Si además hay usuario de Firebase autenticado, validar correspondencia
           if (auth.currentUser && isFirebaseConfigured) {
-            if (!parsed.userId || parsed.userId === auth.currentUser.uid) {
+            const authEmail = (auth.currentUser.email || '').trim().toLowerCase();
+            const clientEmail = (parsed.clientEmail || parsed.email || '').trim().toLowerCase();
+            if (parsed.userId === auth.currentUser.uid || (!parsed.userId && authEmail && clientEmail === authEmail)) {
               return parsed;
             }
-          } else {
+          } else if (import.meta.env.DEV) {
             return parsed;
           }
         }
