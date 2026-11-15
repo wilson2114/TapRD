@@ -711,7 +711,8 @@ export function getPublicClientData(client: Client) {
     googleReviewsUrl: client.googleReviewsUrl,
     mapsUrl: client.mapsUrl,
     productAssigned: client.productAssigned,
-    profileTheme: client.profileTheme
+    profileTheme: client.profileTheme,
+    qrRedirect: client.qrRedirect
   };
 }
 
@@ -744,7 +745,8 @@ export const ALLOWED_CLIENT_FIELDS: (keyof Client)[] = [
   'profileTheme',
   'status',
   'active',
-  'profileStatus'
+  'profileStatus',
+  'qrRedirect'
 ];
 
 /**

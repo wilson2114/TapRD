@@ -3,6 +3,7 @@ import { HomePage } from './pages/HomePage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { QrRedirectPage } from './pages/QrRedirectPage';
 import { getProductBySlug } from './data/products';
 
 // Auth Pages (Unified Login & Activation)
@@ -306,6 +307,18 @@ export default function App() {
     const slug = currentPath.replace(/^\/p\//, '');
     return (
       <ProfilePage
+        slug={slug}
+        onNavigateHome={() => navigate('/')}
+        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
+      />
+    );
+  }
+
+  // Route: Dynamic QR Redirect (/q/:slug)
+  if (currentPath.startsWith('/q/')) {
+    const slug = currentPath.replace(/^\/q\//, '');
+    return (
+      <QrRedirectPage
         slug={slug}
         onNavigateHome={() => navigate('/')}
         onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}

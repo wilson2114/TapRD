@@ -181,4 +181,22 @@ export interface Client {
   privacyAccepted?: boolean;
   termsAcceptedAt?: string;
   privacyAcceptedAt?: string;
+  qrRedirect?: QrRedirectConfig;
 }
+
+export type QrRedirectMode =
+  | 'profile'
+  | 'whatsapp'
+  | 'instagram'
+  | 'reviews'
+  | 'maps'
+  | 'website'
+  | 'custom';
+
+export interface QrRedirectConfig {
+  mode: QrRedirectMode;
+  customUrl?: string;
+  whatsappMessage?: string;
+  updatedAt?: string;
+}
+
