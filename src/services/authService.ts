@@ -560,8 +560,8 @@ export async function loginClient(
     return { success: false, error: 'Por favor ingresa tu correo electrónico y contraseña.' };
   }
 
-  // Fallback de demostración rápida para pruebas
-  if (cleanEmail === 'cliente@taprd.com' || cleanEmail === 'demo@barberia.com') {
+  // Fallback de demostración rápida para pruebas (solo en desarrollo local)
+  if (import.meta.env.DEV && (cleanEmail === 'cliente@taprd.com' || cleanEmail === 'demo@barberia.com')) {
     const demoClient: Client = {
       id: 'cli-demo-barberia',
       businessName: 'Barbería Wilson',
