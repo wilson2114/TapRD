@@ -21,7 +21,8 @@ import {
   BarChart3,
   CreditCard,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  Landmark
 } from 'lucide-react';
 import { PUBLIC_BASE_URL } from '../../config/constants';
 
@@ -63,6 +64,12 @@ export function ClientLayout({
       path: '/cliente/servicios',
       icon: Briefcase,
       badge: client?.services?.length ? `${client.services.length}` : null
+    },
+    {
+      label: 'Cuentas Bancarias',
+      path: '/cliente/cuentas',
+      icon: Landmark,
+      badge: client?.bankAccounts?.length ? `${client.bankAccounts.length}` : null
     },
     {
       label: 'Horario Comercial',

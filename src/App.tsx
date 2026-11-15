@@ -22,6 +22,7 @@ import { ProtectedRoute } from './components/admin/ProtectedRoute';
 import { ClientDashboardPage } from './pages/client/ClientDashboardPage';
 import { ClientProfilePage } from './pages/client/ClientProfilePage';
 import { ClientServicesPage } from './pages/client/ClientServicesPage';
+import { ClientBankAccountsPage } from './pages/client/ClientBankAccountsPage';
 import { ClientHoursPage } from './pages/client/ClientHoursPage';
 import { ClientSocialsPage } from './pages/client/ClientSocialsPage';
 import { ClientQrPage } from './pages/client/ClientQrPage';
@@ -206,6 +207,8 @@ export default function App() {
       clientContent = <ClientProfilePage onNavigate={navigate} />;
     } else if (currentPath === '/cliente/servicios' || currentPath === '/cliente/servicios/') {
       clientContent = <ClientServicesPage onNavigate={navigate} />;
+    } else if (currentPath === '/cliente/cuentas' || currentPath === '/cliente/cuentas/') {
+      clientContent = <ClientBankAccountsPage onNavigate={navigate} />;
     } else if (currentPath === '/cliente/horarios' || currentPath === '/cliente/horarios/') {
       clientContent = <ClientHoursPage onNavigate={navigate} />;
     } else if (currentPath === '/cliente/redes' || currentPath === '/cliente/redes/') {
