@@ -286,11 +286,7 @@ export async function getClientById(id: string): Promise<Client | null> {
 export async function getClientBySlug(slug: string): Promise<Client | null> {
   const cleanSlug = slug.trim().toLowerCase();
 
-  // 1. Buscar en memoria
-  const local = inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
-  if (local) return local;
-
-  // 2. Consultar directamente en Firestore
+  // 1. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
   if (isFirebaseConfigured) {
     try {
       const q = query(
@@ -301,12 +297,19 @@ export async function getClientBySlug(slug: string): Promise<Client | null> {
       if (!snap.empty) {
         const first = snap.docs[0];
         const data = { ...(first.data() as Client), id: first.id };
+        const idx = inMemoryClients.findIndex(c => c.id === data.id);
+        if (idx !== -1) inMemoryClients[idx] = data;
+        else inMemoryClients = [data, ...inMemoryClients];
         return data;
       }
     } catch (err) {
       console.warn(`Error buscando slug ${cleanSlug} en Firestore:`, err);
     }
   }
+
+  // 2. Respaldo en memoria / caché local
+  const local = inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
+  if (local) return local;
 
   return null;
 }

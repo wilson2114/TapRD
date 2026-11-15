@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClientAuth } from '../../hooks/useClientAuth';
 import { ClientLayout } from '../../components/client/ClientLayout';
 import { ClientSocialLinks, ClientSettings } from '../../types/client';
@@ -40,29 +40,52 @@ export function ClientSocialsPage({ onNavigate }: ClientSocialsPageProps) {
     showAddress: client?.settings?.showAddress ?? true,
     showHours: client?.settings?.showHours ?? true,
     showServices: client?.settings?.showServices ?? true,
-    showReviews: client?.settings?.showReviews ?? true
+    showReviews: client?.settings?.showReviews ?? true,
+    showBankAccounts: client?.settings?.showBankAccounts ?? true
   }));
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Sincronizar cuando client termine de cargar o se actualice desde Firestore
+  useEffect(() => {
+    if (!client) return;
+    setSocialLinks({
+      instagram: client.socialLinks?.instagram || '',
+      facebook: client.socialLinks?.facebook || '',
+      tiktok: client.socialLinks?.tiktok || '',
+      youtube: client.socialLinks?.youtube || '',
+      website: client.socialLinks?.website || ''
+    });
+    setSettings({
+      showPhone: client.settings?.showPhone ?? true,
+      showWhatsapp: client.settings?.showWhatsapp ?? true,
+      showInstagram: client.settings?.showInstagram ?? true,
+      showFacebook: client.settings?.showFacebook ?? true,
+      showTikTok: client.settings?.showTikTok ?? true,
+      showAddress: client.settings?.showAddress ?? true,
+      showHours: client.settings?.showHours ?? true,
+      showServices: client.settings?.showServices ?? true,
+      showReviews: client.settings?.showReviews ?? true,
+      showBankAccounts: client.settings?.showBankAccounts ?? true
+    });
+  }, [client?.id, client?.updatedAt]);
+
   if (!client) return null;
 
   const handleSocialChange = (field: keyof ClientSocialLinks, value: string) => {
-    // Si escribe @handle o url, mantenerlo limpio
-    const clean = value.replace(/^@/, '').trim();
-    setSocialLinks({
-      ...socialLinks,
-      [field]: clean
-    });
+    setSocialLinks((prev) => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const handleToggleSetting = (field: keyof ClientSettings) => {
-    setSettings({
-      ...settings,
-      [field]: !settings[field]
-    });
+    setSettings((prev) => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -71,12 +94,27 @@ export function ClientSocialsPage({ onNavigate }: ClientSocialsPageProps) {
     setSaveSuccess(false);
     setIsSaving(true);
 
+    const cleanedSocialLinks: ClientSocialLinks = {
+      instagram: (socialLinks.instagram || '').trim().replace(/^@/, ''),
+      facebook: (socialLinks.facebook || '').trim(),
+      tiktok: (socialLinks.tiktok || '').trim().replace(/^@/, ''),
+      youtube: (socialLinks.youtube || '').trim(),
+      website: (socialLinks.website || '').trim()
+    };
+
+    const mergedSettings: ClientSettings = {
+      ...(client.settings || {}),
+      ...settings
+    };
+
     try {
       const updated = await updateClient({
-        socialLinks,
-        settings
+        socialLinks: cleanedSocialLinks,
+        settings: mergedSettings
       });
       if (updated) {
+        setSocialLinks(cleanedSocialLinks);
+        setSettings(mergedSettings);
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {

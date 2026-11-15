@@ -757,7 +757,7 @@ export async function getCurrentClient(): Promise<Client | null> {
     } catch {}
   }
 
-  // 1. Revisar si hay sesión activa en localStorage que corresponda al usuario autenticado
+  // 1. Si hay sesión en localStorage, refrescar desde Firestore para sincronizar cambios entre dispositivos
   if (typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(CLIENT_SESSION_KEY);
@@ -768,6 +768,17 @@ export async function getCurrentClient(): Promise<Client | null> {
             const authEmail = (auth.currentUser.email || '').trim().toLowerCase();
             const clientEmail = (parsed.clientEmail || parsed.email || '').trim().toLowerCase();
             if (parsed.userId === auth.currentUser.uid || (!parsed.userId && authEmail && clientEmail === authEmail)) {
+              try {
+                const freshSnap = await getDoc(doc(db, 'clients', parsed.id));
+                if (freshSnap.exists()) {
+                  const freshClient = { ...(freshSnap.data() as Client), id: freshSnap.id };
+                  localStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(freshClient));
+                  return freshClient;
+                }
+              } catch {
+                // Respaldo offline si falla la red
+                return parsed;
+              }
               return parsed;
             }
           } else if (import.meta.env.DEV) {
