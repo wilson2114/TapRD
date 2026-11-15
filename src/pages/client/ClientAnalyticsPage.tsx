@@ -4,22 +4,17 @@ import { ClientLayout } from '../../components/client/ClientLayout';
 import { canUseFeature } from '../../services/featureAccessService';
 import { getLimit } from '../../services/limitService';
 import { fetchClientAnalytics, ClientAnalyticsSummary } from '../../services/profileService';
-import { getProfileLocalStats } from '../../utils/analytics';
 import { 
   TrendingUp, 
   Eye, 
-  MousePointer, 
   Smartphone, 
   Lock, 
   ArrowRight, 
-  Sparkles, 
   Calendar, 
-  CheckCircle2, 
   BarChart3,
-  Clock,
-  Share2,
-  PhoneCall,
-  MessageSquare
+  MessageSquare,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 interface ClientAnalyticsPageProps {
@@ -29,36 +24,45 @@ interface ClientAnalyticsPageProps {
 export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
   const { client } = useClientAuth();
   const [remoteStats, setRemoteStats] = useState<ClientAnalyticsSummary | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  const maxDays = client ? (getLimit(client, 'maxAnalyticsDays') ?? 30) : 30;
+  const maxDaysLimit = client ? getLimit(client, 'maxAnalyticsDays') : 30;
 
   useEffect(() => {
     if (!client?.id) return;
     let active = true;
-    fetchClientAnalytics(client.id, maxDays)
+    setLoadingStats(true);
+    setStatsError(null);
+
+    fetchClientAnalytics(client.id, maxDaysLimit)
       .then((summary) => {
         if (active) setRemoteStats(summary);
       })
-      .catch(() => {});
+      .catch((err: any) => {
+        if (active) {
+          console.warn('[ClientAnalyticsPage] Error cargando estadísticas:', err);
+          setStatsError('No se pudieron cargar las métricas desde Firestore. Verifica tu conexión o permisos.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingStats(false);
+      });
+
     return () => {
       active = false;
     };
-  }, [client?.id, maxDays]);
+  }, [client?.id, maxDaysLimit]);
 
   if (!client) return null;
 
-  const hasAdvanced = canUseFeature(client, 'advancedAnalytics');
+  const hasAdvanced = canUseFeature(client, 'advancedAnalytics', { checkSubscriptionActive: true });
 
-  const localStats = getProfileLocalStats(client.slug);
-  const totalViews = Math.max(
-    client.viewsCount ?? 0,
-    remoteStats?.totalViews ?? 0,
-    localStats.totalTaps
-  );
-  const whatsappClicks = Math.max(remoteStats?.whatsappClicks ?? 0, localStats.whatsappClicks);
-  const instagramClicks = Math.max(remoteStats?.instagramClicks ?? 0, localStats.instagramClicks);
-  const vcardDownloads = Math.max(remoteStats?.vcardDownloads ?? 0, localStats.vcardDownloads);
-  const callClicks = Math.max(remoteStats?.phoneClicks ?? 0, 0);
+  const totalViews = Math.max(client.viewsCount ?? 0, remoteStats?.totalViews ?? 0);
+  const whatsappClicks = remoteStats?.whatsappClicks ?? 0;
+  const instagramClicks = remoteStats?.instagramClicks ?? 0;
+  const vcardDownloads = remoteStats?.vcardDownloads ?? 0;
+  const callClicks = remoteStats?.phoneClicks ?? 0;
   const totalActionClicks = whatsappClicks + instagramClicks + callClicks;
   const whatsappRate = totalViews > 0 ? ((whatsappClicks / totalViews) * 100).toFixed(1) : '0.0';
   const whatsappPct = totalActionClicks > 0 ? Math.round((whatsappClicks / totalActionClicks) * 100) : 0;
@@ -77,13 +81,25 @@ export function ClientAnalyticsPage({ onNavigate }: ClientAnalyticsPageProps) {
       subtitle="Analiza las visitas, toques NFC y clics en los enlaces de tu negocio"
     >
       <div className="space-y-6 max-w-5xl">
+
+        {statsError && (
+          <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span>{statsError}</span>
+          </div>
+        )}
         
         {/* Banner de Rango de Historial */}
         <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-blue-900 dark:text-blue-300">
-            <Calendar className="w-4 h-4 text-blue-600" />
+            {loadingStats ? (
+              <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+            ) : (
+              <Calendar className="w-4 h-4 text-blue-600" />
+            )}
             <span className="font-bold">
-              Historial disponible en tu plan ({client.plan?.toUpperCase() || 'STARTER'}): {maxDays} días
+              Historial disponible en tu plan ({client.plan?.toUpperCase() || 'STARTER'}):{' '}
+              {maxDaysLimit === null ? 'Ilimitado (últimos 365 días)' : `${maxDaysLimit} días`}
             </span>
           </div>
           <button

@@ -1,8 +1,11 @@
-import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, limit } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
 import { recordInteraction, InteractionType } from '../utils/analytics';
+
+const RECENT_EVENT_TIMESTAMPS = new Map<string, number>();
+const EVENT_COOLDOWN_MS = 4000;
 
 export type PublicProfileStatus = 'found' | 'not_found' | 'inactive';
 
@@ -118,6 +121,13 @@ export function trackAnalyticsEvent(
 ): void {
   if (!clientId || clientId === 'preview-temp') return;
 
+  // Evitar duplicados rápidos o spam accidental en la misma sesión
+  const dedupeKey = `${clientId}:${eventType}`;
+  const now = Date.now();
+  const lastAt = RECENT_EVENT_TIMESTAMPS.get(dedupeKey) || 0;
+  if (now - lastAt < EVENT_COOLDOWN_MS) return;
+  RECENT_EVENT_TIMESTAMPS.set(dedupeKey, now);
+
   if (slug) {
     recordInteraction(slug, mapToLocalInteraction(eventType));
   }
@@ -137,11 +147,11 @@ export function trackAnalyticsEvent(
 
 /**
  * Obtiene y agrega las métricas reales de un cliente desde Firestore
- * filtradas por el rango de días permitido en su plan.
+ * filtradas por el rango de días permitido en su plan (máx. 5000 eventos por consulta).
  */
 export async function fetchClientAnalytics(
   clientId: string,
-  maxDays: number = 30
+  maxDays: number | null = 30
 ): Promise<ClientAnalyticsSummary> {
   const summary: ClientAnalyticsSummary = {
     totalViews: 0,
@@ -163,59 +173,56 @@ export async function fetchClientAnalytics(
     return summary;
   }
 
-  try {
-    const cutoffIso = new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000).toISOString();
-    const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
-    const q = query(eventsRef, where('createdAt', '>=', cutoffIso));
-    const snapshot = await getDocs(q);
+  const safeDays = maxDays === null ? 365 : Math.min(Math.max(1, maxDays), 365);
+  const cutoffIso = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+  const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
+  const q = query(eventsRef, where('createdAt', '>=', cutoffIso), limit(5000));
+  const snapshot = await getDocs(q);
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      const type = data.type as AnalyticsEventType;
-      const device = data.device as AnalyticsDeviceType;
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    const type = data.type as AnalyticsEventType;
+    const device = data.device as AnalyticsDeviceType;
 
-      if (device === 'ios') summary.iosCount++;
-      else if (device === 'android') summary.androidCount++;
-      else if (device === 'desktop') summary.desktopCount++;
+    if (device === 'ios') summary.iosCount++;
+    else if (device === 'android') summary.androidCount++;
+    else if (device === 'desktop') summary.desktopCount++;
 
-      switch (type) {
-        case 'profileView':
-        case 'nfcScan':
-        case 'qrScan':
-          summary.totalViews++;
-          break;
-        case 'whatsappClick':
-          summary.whatsappClicks++;
-          break;
-        case 'phoneClick':
-          summary.phoneClicks++;
-          break;
-        case 'vcardDownload':
-          summary.vcardDownloads++;
-          break;
-        case 'instagramClick':
-          summary.instagramClicks++;
-          break;
-        case 'facebookClick':
-          summary.facebookClicks++;
-          break;
-        case 'tiktokClick':
-          summary.tiktokClicks++;
-          break;
-        case 'websiteClick':
-          summary.websiteClicks++;
-          break;
-        case 'reviewClick':
-          summary.reviewClicks++;
-          break;
-        case 'directionsClick':
-          summary.directionsClicks++;
-          break;
-      }
-    });
-  } catch (err) {
-    console.warn('[Analytics] Error leyendo eventos desde Firestore:', err);
-  }
+    switch (type) {
+      case 'profileView':
+      case 'nfcScan':
+      case 'qrScan':
+        summary.totalViews++;
+        break;
+      case 'whatsappClick':
+        summary.whatsappClicks++;
+        break;
+      case 'phoneClick':
+        summary.phoneClicks++;
+        break;
+      case 'vcardDownload':
+        summary.vcardDownloads++;
+        break;
+      case 'instagramClick':
+        summary.instagramClicks++;
+        break;
+      case 'facebookClick':
+        summary.facebookClicks++;
+        break;
+      case 'tiktokClick':
+        summary.tiktokClicks++;
+        break;
+      case 'websiteClick':
+        summary.websiteClicks++;
+        break;
+      case 'reviewClick':
+        summary.reviewClicks++;
+        break;
+      case 'directionsClick':
+        summary.directionsClicks++;
+        break;
+    }
+  });
 
   return summary;
 }

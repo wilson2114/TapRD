@@ -147,9 +147,16 @@ service cloud.firestore {
       match /analytics_events/{eventId} {
         allow read: if isAdmin() ||
           isClientOwner(clientId) ||
-          (isAuthenticated() && get(/databases/$(database)/documents/clients/$(clientId)).data.userId == request.auth.uid);
+          (isAuthenticated() && (
+            get(/databases/$(database)/documents/clients/$(clientId)).data.userId == request.auth.uid ||
+            ('email' in request.auth.token &&
+             get(/databases/$(database)/documents/clients/$(clientId)).data.clientEmail is string &&
+             get(/databases/$(database)/documents/clients/$(clientId)).data.clientEmail.lower() == request.auth.token.email.lower())
+          ));
 
-        allow create: if request.resource.data.keys().hasAll(['type', 'device', 'createdAt']) &&
+        allow create: if exists(/databases/$(database)/documents/clients/$(clientId)) &&
+          get(/databases/$(database)/documents/clients/$(clientId)).data.status != 'inactive' &&
+          request.resource.data.keys().hasAll(['type', 'device', 'createdAt']) &&
           request.resource.data.keys().hasOnly(['type', 'device', 'createdAt', 'source']) &&
           request.resource.data.type in [
             'profileView', 'nfcScan', 'qrScan', 'whatsappClick',
@@ -157,7 +164,14 @@ service cloud.firestore {
             'facebookClick', 'tiktokClick', 'websiteClick',
             'reviewClick', 'directionsClick'
           ] &&
-          request.resource.data.device in ['ios', 'android', 'desktop'];
+          request.resource.data.device in ['ios', 'android', 'desktop'] &&
+          request.resource.data.createdAt is string &&
+          request.resource.data.createdAt.size() >= 20 &&
+          request.resource.data.createdAt.size() <= 35 &&
+          (!('source' in request.resource.data) || (
+            request.resource.data.source is string &&
+            request.resource.data.source.size() <= 50
+          ));
 
         allow update, delete: if false;
       }
