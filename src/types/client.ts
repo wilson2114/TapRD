@@ -197,6 +197,7 @@ export interface QrRedirectConfig {
   mode: QrRedirectMode;
   customUrl?: string;
   whatsappMessage?: string;
+  applyToProfileUrl?: boolean;
   updatedAt?: string;
 }
 

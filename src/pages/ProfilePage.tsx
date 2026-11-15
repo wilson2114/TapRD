@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getCachedClientBySlug, fetchClientBySlug, getPublicClientData, incrementClientViews } from '../services/clientService';
 import { trackAnalyticsEvent } from '../services/profileService';
+import { resolveQrRedirectTarget, ResolvedQrTarget } from '../utils/qrRedirect';
 import { ClientProfile } from '../components/ClientProfile';
 import { DigitalProfile } from '../components/DigitalProfile';
 import { DEMO_PROFILES } from '../data/mockData';
 import { Client } from '../types';
-import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Loader2, ShieldAlert, ArrowLeft, ExternalLink, QrCode } from 'lucide-react';
 
 interface ProfilePageProps {
   slug: string;
@@ -19,10 +20,16 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
 
   const [client, setClient] = useState<Client | null>(() => getCachedClientBySlug(cleanSlug));
   const [isLoading, setIsLoading] = useState<boolean>(() => !getCachedClientBySlug(cleanSlug));
+  const [redirectTarget, setRedirectTarget] = useState<ResolvedQrTarget | null>(null);
 
   // Stale-while-revalidate: mostrar caché al instante y refrescar en segundo plano desde Firestore
   useEffect(() => {
     let isMounted = true;
+    let redirectTimer: number | undefined;
+    const bypassRedirect =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('direct') === '1';
+
     const cached = getCachedClientBySlug(cleanSlug);
     if (cached) {
       setClient(cached);
@@ -43,6 +50,22 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
           if (fetched && fetched.status === 'active' && fetched.profileStatus !== 'inactive' && fetched.active !== false) {
             incrementClientViews(fetched.id);
             trackAnalyticsEvent(fetched.id, 'profileView', fetched.slug);
+
+            if (
+              !bypassRedirect &&
+              fetched.qrRedirect?.mode &&
+              fetched.qrRedirect.mode !== 'profile' &&
+              fetched.qrRedirect.applyToProfileUrl !== false
+            ) {
+              const target = resolveQrRedirectTarget(fetched);
+              if (target.isExternal && target.targetUrl) {
+                setRedirectTarget(target);
+                const destination = target.targetUrl;
+                redirectTimer = window.setTimeout(() => {
+                  window.location.replace(destination);
+                }, 250);
+              }
+            }
           }
         }
       })
@@ -53,8 +76,38 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
 
     return () => {
       isMounted = false;
+      if (redirectTimer) window.clearTimeout(redirectTimer);
     };
   }, [cleanSlug]);
+
+  if (redirectTarget?.targetUrl) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-white">
+        <div className="max-w-sm w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto border border-blue-500/30">
+            <QrCode className="w-7 h-7 animate-pulse" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">
+              Redirección Activa TapRD
+            </p>
+            <h1 className="text-lg font-black text-white">
+              Redirigiendo a {redirectTarget.label}...
+            </h1>
+            {client && <p className="text-xs text-slate-400">{client.businessName}</p>}
+          </div>
+          <a
+            href={redirectTarget.targetUrl}
+            rel="noopener noreferrer"
+            className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+          >
+            <span>Continuar ahora</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   // Pantalla de carga estética mientras consulta Firestore
   if (isLoading) {

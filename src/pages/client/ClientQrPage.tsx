@@ -86,6 +86,7 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
   const [mode, setMode] = useState<QrRedirectMode>('profile');
   const [customUrl, setCustomUrl] = useState('');
   const [whatsappMessage, setWhatsappMessage] = useState('');
+  const [applyToProfileUrl, setApplyToProfileUrl] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -95,7 +96,8 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
     setMode(client.qrRedirect?.mode || 'profile');
     setCustomUrl(client.qrRedirect?.customUrl || '');
     setWhatsappMessage(client.qrRedirect?.whatsappMessage || '');
-  }, [client?.id, client?.qrRedirect?.mode, client?.qrRedirect?.customUrl, client?.qrRedirect?.whatsappMessage]);
+    setApplyToProfileUrl(client.qrRedirect?.applyToProfileUrl !== false);
+  }, [client?.id, client?.qrRedirect?.mode, client?.qrRedirect?.customUrl, client?.qrRedirect?.whatsappMessage, client?.qrRedirect?.applyToProfileUrl]);
 
   if (!client) return null;
 
@@ -107,7 +109,8 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
     qrRedirect: {
       mode,
       customUrl,
-      whatsappMessage
+      whatsappMessage,
+      applyToProfileUrl
     }
   };
   const resolvedPreview = resolveQrRedirectTarget(previewClient);
@@ -140,6 +143,7 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
           mode,
           customUrl: mode === 'custom' ? (sanitizeExternalUrl(customUrl) || customUrl.trim()) : customUrl.trim(),
           whatsappMessage: whatsappMessage.trim(),
+          applyToProfileUrl,
           updatedAt: new Date().toISOString()
         }
       });
@@ -293,6 +297,26 @@ export function ClientQrPage({ onNavigate }: ClientQrPageProps) {
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              )}
+
+              {/* Opción para aplicar también a QR/NFC ya impresos (/p/:slug) */}
+              {mode !== 'profile' && (
+                <label className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/60 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyToProfileUrl}
+                    onChange={(e) => setApplyToProfileUrl(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-900 dark:text-white block">
+                      Aplicar también a códigos QR o NFC ya impresos (/p/{client.slug})
+                    </span>
+                    <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Si ya imprimiste un QR anterior, al escanearlo también redirigirá automáticamente a este destino.
+                    </span>
+                  </div>
+                </label>
               )}
 
               {/* Vista previa del destino resuelto o aviso si falta dato */}
