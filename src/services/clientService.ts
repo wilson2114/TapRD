@@ -536,6 +536,9 @@ export async function updateClient(
     inMemoryClients = [updatedClient, ...inMemoryClients];
   }
   saveLocalCache([...inMemoryClients]);
+  if (updatedClient.slug) {
+    savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
+  }
 
   // 2. Actualizar en Firestore con merge: true para permitir actualización o creación si no existía
   if (isFirebaseConfigured) {
@@ -738,7 +741,10 @@ export const ALLOWED_CLIENT_FIELDS: (keyof Client)[] = [
   'avatarInitials',
   'avatarBgColor',
   'coverGradient',
-  'profileTheme'
+  'profileTheme',
+  'status',
+  'active',
+  'profileStatus'
 ];
 
 /**
@@ -790,7 +796,7 @@ export async function updateClientByOwner(
       ]);
     } catch (err: any) {
       console.error(`Error actualizando cliente ${id} (propietario) en Firestore:`, err);
-      const isPermError = err?.code === 'permission-denied' ||
+      const isPermError = err?.code === 'permission-denied' || 
                           (err?.message && err.message.toLowerCase().includes('permission'));
       if (isPermError) {
         throw new Error('Permiso denegado en Firestore al guardar los cambios. Verifica tu sesión e intenta de nuevo.');
@@ -812,6 +818,9 @@ export async function updateClientByOwner(
     inMemoryClients = [updatedClient, ...inMemoryClients];
   }
   saveLocalCache([...inMemoryClients]);
+  if (updatedClient.slug) {
+    savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
+  }
 
   // Sincronizar con la sesión local del cliente si existe
   if (typeof window !== 'undefined') {
