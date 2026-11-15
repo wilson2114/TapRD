@@ -283,31 +283,68 @@ export async function getClientById(id: string): Promise<Client | null> {
 /**
  * OBTENER CLIENTE POR SLUG
  */
+const PUBLIC_PROFILE_CACHE_PREFIX = 'taprd_public_profile_';
+
+function savePublicSlugCache(cleanSlug: string, client: Client): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`${PUBLIC_PROFILE_CACHE_PREFIX}${cleanSlug}`, JSON.stringify(client));
+  } catch {}
+}
+
+function readPublicSlugCache(cleanSlug: string): Client | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${PUBLIC_PROFILE_CACHE_PREFIX}${cleanSlug}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Client;
+    return parsed && parsed.id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getClientBySlug(slug: string): Promise<Client | null> {
   const cleanSlug = slug.trim().toLowerCase();
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
-  // 1. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
+  // 1. Si el dispositivo está sin conexión, devolver inmediatamente la copia offline guardada
+  if (isOffline) {
+    const cachedOffline = readPublicSlugCache(cleanSlug) || inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
+    if (cachedOffline) return cachedOffline;
+  }
+
+  // 2. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
   if (isFirebaseConfigured) {
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
         where('slug', '==', cleanSlug)
       );
-      const snap = await getDocs(q);
+      const snap = await Promise.race([
+        getDocs(q),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('offline-timeout')), 4500)
+        )
+      ]);
       if (!snap.empty) {
         const first = snap.docs[0];
         const data = { ...(first.data() as Client), id: first.id };
         const idx = inMemoryClients.findIndex(c => c.id === data.id);
         if (idx !== -1) inMemoryClients[idx] = data;
         else inMemoryClients = [data, ...inMemoryClients];
+        savePublicSlugCache(cleanSlug, data);
         return data;
       }
     } catch (err) {
-      console.warn(`Error buscando slug ${cleanSlug} en Firestore:`, err);
+      console.warn(`Error buscando slug ${cleanSlug} en Firestore (usando respaldo offline si existe):`, err);
     }
   }
 
-  // 2. Respaldo en memoria / caché local
+  // 3. Respaldo en caché persistente por slug o memoria local
+  const cachedSlug = readPublicSlugCache(cleanSlug);
+  if (cachedSlug) return cachedSlug;
+
   const local = inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
   if (local) return local;
 

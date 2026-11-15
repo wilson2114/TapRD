@@ -85,6 +85,20 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
   const [copied, setCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -249,6 +263,12 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
 
         {/* Profile Container (Mobile-First) */}
         <main className="relative z-10 w-full max-w-md px-4 pt-4 space-y-4">
+          {!isOnline && (
+            <div className="px-4 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200/80 dark:border-amber-400/25 text-amber-900 dark:text-amber-200 text-xs font-bold flex items-center justify-center gap-2 text-center">
+              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+              <span>Modo sin conexión • Mostrando última versión guardada</span>
+            </div>
+          )}
           {/* 1. Cabecera (Hero Section) Dinámica y Adaptable */}
           <section className={`${cardSurface} overflow-hidden`}>
             {/* Franja superior personalizable */}
