@@ -41,8 +41,8 @@ export function ScrollReveal({
         });
       },
       {
-        threshold: 0.08,
-        rootMargin: '0px 0px -48px 0px'
+        threshold: 0.01,
+        rootMargin: '0px 0px -16px 0px'
       }
     );
 

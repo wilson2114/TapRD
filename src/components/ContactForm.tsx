@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ContactInquiry } from '../types';
 import { Send, CheckCircle2, X, Sparkles, MessageSquare, Phone, Building, User, Mail, Tag } from 'lucide-react';
 
@@ -83,34 +84,34 @@ export function ContactForm({
     setIsSuccess(false);
   };
 
-  const content = (
-    <div className={`bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 ${isModal ? '' : 'border border-slate-200/80 dark:border-slate-800 shadow-lg'}`}>
-      
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-900/60">
-            Cotización Inmediata
-          </span>
-          <h2 className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            {title}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {subtitle}
-          </p>
-        </div>
-        {isModal && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            aria-label="Cerrar formulario de contacto"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+  const headerBlock = (
+    <div className={`flex items-start justify-between gap-3 ${isModal ? 'px-5 pt-5 pb-4 sm:px-8 sm:pt-7 sm:pb-5 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md' : 'mb-6'}`}>
+      <div className="min-w-0">
+        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-900/60 inline-block">
+          Cotización Inmediata
+        </span>
+        <h2 className="mt-2 text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          {title}
+        </h2>
+        <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+          {subtitle}
+        </p>
       </div>
+      {isModal && onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-[44px] min-w-[44px] shrink-0 flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          aria-label="Cerrar formulario de contacto"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      )}
+    </div>
+  );
 
+  const bodyBlock = (
+    <div className={isModal ? 'p-5 sm:p-8 overflow-y-auto overscroll-contain flex-1' : ''}>
       {isSuccess ? (
         /* Confirmation State */
         <div id="contact-success-state" className="py-8 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -170,7 +171,7 @@ export function ContactForm({
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Ej. Carlos Valdéz"
-                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -190,7 +191,7 @@ export function ContactForm({
                   value={formData.businessName}
                   onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
                   placeholder="Ej. Barbería Valdéz SRL"
-                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -210,7 +211,7 @@ export function ContactForm({
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="Ej. (809) 555-0123"
-                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -230,7 +231,7 @@ export function ContactForm({
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="carlos@minegocio.com"
-                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -243,7 +244,7 @@ export function ContactForm({
               <select
                 value={formData.businessType}
                 onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
-                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white"
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white"
               >
                 {businessTypes.map((type, i) => (
                   <option key={i} value={type} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
@@ -261,7 +262,7 @@ export function ContactForm({
               <select
                 value={formData.productInterest}
                 onChange={(e) => setFormData({ ...formData, productInterest: e.target.value })}
-                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white"
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white"
               >
                 {productOptions.map((opt, i) => (
                   <option key={i} value={opt} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
@@ -287,7 +288,7 @@ export function ContactForm({
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                 placeholder="¿Cuántas unidades necesitas? ¿Tienes alguna duda de personalización con tu logo?"
-                className="w-full min-h-[88px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                className="w-full min-h-[88px] pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
@@ -322,14 +323,36 @@ export function ContactForm({
     </div>
   );
 
+  const content = (
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-3xl ${
+        isModal
+          ? 'flex flex-col max-h-[92dvh] overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xl'
+          : 'p-5 sm:p-10 border border-slate-200/80 dark:border-slate-800 shadow-lg'
+      }`}
+    >
+      {headerBlock}
+      {bodyBlock}
+    </div>
+  );
+
   if (isModal) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
-        <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    const modalMarkup = (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center p-2.5 sm:p-4 bg-slate-900/65 dark:bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose?.();
+        }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="max-w-2xl w-full">
           {content}
         </div>
       </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalMarkup, document.body) : modalMarkup;
   }
 
   return (

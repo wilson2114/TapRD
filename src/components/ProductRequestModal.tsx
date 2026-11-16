@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle2, MessageCircle, Send, Sparkles, Building, User, Phone, Mail, Layers, HelpCircle } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { createProductWhatsAppUrl } from '../config/constants';
@@ -96,10 +97,15 @@ export function ProductRequestModal({
     setIsSubmitted(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
+  const modalMarkup = (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden max-h-[92dvh] flex flex-col"
         role="dialog"
         aria-modal="true"
       >
@@ -133,7 +139,7 @@ export function ProductRequestModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1 text-slate-800 dark:text-slate-200">
+        <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain flex-1 text-slate-800 dark:text-slate-200">
           {isSubmitted ? (
             /* Confirmation View */
             <div className="py-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -284,7 +290,7 @@ export function ProductRequestModal({
                   <CitySelector
                     value={city}
                     onChange={setCity}
-                    buttonClassName="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all flex items-center justify-between gap-2 text-left cursor-pointer"
+                    buttonClassName="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all flex items-center justify-between gap-2 text-left cursor-pointer"
                   />
                 </div>
 
@@ -295,7 +301,7 @@ export function ProductRequestModal({
                   <select
                     value={businessType}
                     onChange={(e) => setBusinessType(e.target.value)}
-                    className="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all cursor-pointer"
+                    className="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all cursor-pointer"
                   >
                     <option value="Barbería / Salón de Belleza">Barbería / Salón de Belleza</option>
                     <option value="Restaurante / Bar / Cafetería">Restaurante / Bar / Cafetería</option>
@@ -417,4 +423,6 @@ export function ProductRequestModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalMarkup, document.body) : modalMarkup;
 }
