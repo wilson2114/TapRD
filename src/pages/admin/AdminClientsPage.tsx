@@ -621,324 +621,203 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
 
         </div>
 
-        {/* Clients Table / Cards List */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden">
-          
-          {filteredClients.length === 0 ? (
-            <div className="p-12 text-center space-y-3">
-              <Building className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                No se encontraron clientes con los filtros aplicados.
-              </p>
-              <button
-                type="button"
-                onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
-                className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+        {/* Clients Directory Cards (Unified Desktop & Mobile - Zero Horizontal Scroll) */}
+        {filteredClients.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-12 text-center space-y-3">
+            <Building className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              No se encontraron clientes con los filtros aplicados.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
+              className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer"
+            >
+              Restablecer filtros
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredClients.map((client) => (
+              <div
+                key={client.id}
+                className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700/70 shadow-2xs hover:shadow-md transition-all p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4"
               >
-                Restablecer filtros
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/80 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                      <th className="py-3 px-4">Negocio / Propietario</th>
-                      <th className="py-3 px-3">Categoría & Ciudad</th>
-                      <th className="py-3 px-3">WhatsApp</th>
-                      <th className="py-3 px-3">Perfil</th>
-                      <th className="py-3 px-3">Acceso</th>
-                      <th className="py-3 px-3">Plan & Vistas</th>
-                      <th className="py-3 px-4 text-right sticky right-0 bg-slate-50 dark:bg-slate-800/95 shadow-[-8px_0_16px_-12px_rgba(15,23,42,0.18)]">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                    {filteredClients.map((client) => (
-                      <tr key={client.id} className="group hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
-                        
-                        {/* Logo / Initials & Names */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2.5">
-                            {client.logo ? (
-                              <ProtectedImage
-                                wrapperClassName="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
-                                src={client.logo}
-                                alt={client.businessName}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className={`w-9 h-9 rounded-xl ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs`}>
-                                {client.avatarInitials || client.businessName.substring(0, 2).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="font-black text-slate-900 dark:text-white text-sm truncate max-w-[180px]">{client.businessName}</p>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[180px]">{client.ownerName || 'Sin propietario registrado'}</p>
-                            </div>
-                          </div>
-                        </td>
+                {/* Left: Identity & Metadata */}
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  {client.logo ? (
+                    <ProtectedImage
+                      wrapperClassName="w-12 h-12 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0"
+                      src={client.logo}
+                      alt={client.businessName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className={`w-12 h-12 rounded-2xl ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs`}>
+                      {client.avatarInitials || client.businessName.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
 
-                        {/* Category & City */}
-                        <td className="py-3.5 px-3">
-                          <span className="font-bold text-slate-800 dark:text-slate-200 block truncate max-w-[140px]">{client.category}</span>
-                          <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[140px]">
-                            <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                            {client.city}
-                          </span>
-                        </td>
-
-                        {/* WhatsApp */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
-                          <a
-                            href={getWhatsAppUrl(client.whatsapp)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200/60 dark:border-emerald-800 text-[11px]"
-                          >
-                            <MessageCircle className="w-3 h-3 fill-emerald-600 dark:fill-emerald-400 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span>{client.whatsapp}</span>
-                          </a>
-                        </td>
-
-                        {/* Estado Perfil */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
-                          {getStatusBadge(client.status)}
-                        </td>
-
-                        {/* Estado Acceso Portal (Regla 19) */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
-                          {getAccessStatusBadge(client.accessStatus, client.userId)}
-                        </td>
-
-                        {/* Plan & Vistas */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
-                          <span className="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            {client.plan || 'starter'}
-                          </span>
-                          <span className="block text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-1">
-                            {(client.viewsCount || 0).toLocaleString('es-DO')} vistas
-                          </span>
-                        </td>
-
-                        {/* Acciones: Ver, Editar, Copiar enlace, QR, Reenviar invitación, Desactivar, Eliminar */}
-                        <td className="py-3.5 px-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/90 shadow-[-8px_0_16px_-12px_rgba(15,23,42,0.18)] transition-colors">
-                          <div className="flex items-center justify-end gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => handleCopyLink(client.slug, client.id)}
-                              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                              title="Copiar enlace público (/p/slug)"
-                            >
-                              {copiedId === client.id ? (
-                                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                              ) : (
-                                <Copy className="w-4 h-4" />
-                              )}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => window.open(`${PUBLIC_BASE_URL}/q/${client.slug}`, '_blank')}
-                              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 transition-colors cursor-pointer"
-                              title="Probar QR Dinámico (/q/slug)"
-                            >
-                              <QrCode className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={isGeneratingInvite}
-                              onClick={() => handleInviteClient(client)}
-                              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition-colors cursor-pointer"
-                              title="Reenviar invitación de activación al cliente"
-                            >
-                              <Send className="w-4 h-4" />
-                            </button>
-
-                            {client.accessStatus === 'pending' && (
-                              <button
-                                type="button"
-                                onClick={() => handleQuickActivateAccess(client)}
-                                className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors cursor-pointer"
-                                title="Activar cuenta del cliente y marcar como Activo"
-                              >
-                                <ShieldCheck className="w-4 h-4" />
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
-                              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                              title="Editar cliente"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => onNavigate(`/p/${client.slug}`)}
-                              className="p-2 rounded-xl text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                              title="Abrir perfil público"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={isTogglingStatusId === client.id || isDeletingClientId === client.id}
-                              onClick={() => handleToggleStatus(client)}
-                              className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                                client.status === 'active'
-                                  ? 'text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/60'
-                                  : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60'
-                              }`}
-                              title={client.status === 'active' ? 'Pausar perfil público' : 'Activar perfil público'}
-                            >
-                              {isTogglingStatusId === client.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-                              ) : (
-                                <Power className="w-4 h-4" />
-                              )}
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={isDeletingClientId === client.id || isTogglingStatusId === client.id}
-                              onClick={() => handleDelete(client.id, client.businessName)}
-                              className="p-2 rounded-xl text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                              title="Eliminar cliente permanentemente"
-                            >
-                              {isDeletingClientId === client.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Cards (Responsive) */}
-              <div className="lg:hidden divide-y divide-slate-100 dark:divide-slate-800 p-4 space-y-4">
-                {filteredClients.map((client) => (
-                  <div key={client.id} className="pt-4 first:pt-0 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-11 h-11 rounded-2xl ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-xs flex items-center justify-center shrink-0`}>
-                          {client.avatarInitials || client.businessName.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <h3 className="font-black text-slate-900 dark:text-white text-sm leading-tight">{client.businessName}</h3>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{client.ownerName} • {client.category}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        {getStatusBadge(client.status)}
-                        {getAccessStatusBadge(client.accessStatus, client.userId)}
-                      </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-black text-slate-950 dark:text-white text-base leading-tight truncate">
+                        {client.businessName}
+                      </h3>
+                      {getStatusBadge(client.status)}
+                      {getAccessStatusBadge(client.accessStatus, client.userId)}
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        {client.plan || 'starter'}
+                      </span>
                     </div>
 
-                    <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200/70 dark:border-slate-700 text-xs space-y-1">
-                      <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                        <span>Ciudad:</span>
-                        <strong className="text-slate-800 dark:text-white">{client.city}</strong>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                        <span>WhatsApp:</span>
-                        <a href={getWhatsAppUrl(client.whatsapp)} target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-600 dark:text-emerald-400 underline">
-                          {client.whatsapp}
-                        </a>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                        <span>Email:</span>
-                        <span className="font-medium text-slate-700 dark:text-slate-200">{client.email || client.clientEmail || 'No asignado'}</span>
-                      </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {client.ownerName || 'Sin propietario'}
+                      </span>
+                      <span>•</span>
+                      <span>{client.category}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        {client.city}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-mono text-slate-600 dark:text-slate-300">
+                        <Eye className="w-3.5 h-3.5 text-cyan-500" />
+                        {(client.viewsCount || 0).toLocaleString('es-DO')} vistas
+                      </span>
                     </div>
 
-                    {/* Quick Mobile Action Bar */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(client.slug, client.id)}
-                        className="min-h-[44px] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                        title="Copiar enlace"
-                      >
-                        {copiedId === client.id ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        <span>Copiar link</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleInviteClient(client)}
-                        className="min-h-[44px] py-2 px-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                        title="Reenviar invitación de activación"
-                      >
-                        <Send className="w-4 h-4" />
-                        <span>Invitar</span>
-                      </button>
-
-                      {client.accessStatus === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickActivateAccess(client)}
-                          className="min-h-[44px] py-2 px-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                          title="Activar acceso al portal del cliente"
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      {client.whatsapp && (
+                        <a
+                          href={getWhatsAppUrl(client.whatsapp)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 font-bold text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950 px-2.5 py-1 rounded-lg border border-emerald-200/70 dark:border-emerald-800 transition-colors"
                         >
-                          <ShieldCheck className="w-4 h-4" />
-                          <span>Activar</span>
-                        </button>
+                          <MessageCircle className="w-3 h-3 fill-emerald-600 dark:fill-emerald-400" />
+                          <span>{client.whatsapp}</span>
+                        </a>
                       )}
-
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
-                        className="min-h-[44px] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                        <span>Editar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(`/p/${client.slug}`)}
-                        className="min-h-[44px] py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>Ver perfil</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isTogglingStatusId === client.id}
-                        onClick={() => handleToggleStatus(client)}
-                        className={`col-span-2 sm:col-span-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                          client.status === 'active'
-                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60'
-                            : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
-                        }`}
-                      >
-                        {isTogglingStatusId === client.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Power className="w-4 h-4" />
-                        )}
-                        <span>{client.status === 'active' ? 'Pausar perfil' : 'Activar perfil'}</span>
-                      </button>
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200/70 dark:border-slate-700">
+                        /p/{client.slug}
+                      </span>
+                      {(client.clientEmail || client.email) && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[220px]">
+                          <Mail className="w-3 h-3 shrink-0" />
+                          {client.clientEmail || client.email}
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
+                </div>
 
-        </div>
+                {/* Right: Clean, Always-Visible Actions */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-3 xl:pt-0 border-t xl:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyLink(client.slug, client.id)}
+                    className="h-9 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Copiar enlace público (/p/slug)"
+                  >
+                    {copiedId === client.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    <span>{copiedId === client.id ? 'Copiado' : 'Copiar'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.open(`${PUBLIC_BASE_URL}/q/${client.slug}`, '_blank')}
+                    className="h-9 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/50 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Probar QR Dinámico (/q/slug)"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>QR</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isGeneratingInvite}
+                    onClick={() => handleInviteClient(client)}
+                    className="h-9 px-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800/70 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Reenviar invitación de activación"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Invitar</span>
+                  </button>
+
+                  {client.accessStatus === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => handleQuickActivateAccess(client)}
+                      className="h-9 px-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Activar acceso del cliente"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Activar</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(`/admin/clientes/${client.id}/editar`)}
+                    className="h-9 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Editar cliente"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(`/p/${client.slug}`)}
+                    className="h-9 px-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Abrir perfil público"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Perfil</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isTogglingStatusId === client.id || isDeletingClientId === client.id}
+                    onClick={() => handleToggleStatus(client)}
+                    className={`h-9 px-2.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      client.status === 'active'
+                        ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                        : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                    }`}
+                    title={client.status === 'active' ? 'Pausar perfil público' : 'Activar perfil público'}
+                  >
+                    {isTogglingStatusId === client.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Power className="w-3.5 h-3.5" />
+                    )}
+                    <span>{client.status === 'active' ? 'Pausar' : 'Activar'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isDeletingClientId === client.id || isTogglingStatusId === client.id}
+                    onClick={() => handleDelete(client.id, client.businessName)}
+                    className="h-9 px-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Eliminar cliente permanentemente"
+                  >
+                    {isDeletingClientId === client.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
       </div>
 
