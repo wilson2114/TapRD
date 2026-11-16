@@ -4,6 +4,7 @@ import { ProductsPage } from './pages/ProductsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { QrRedirectPage } from './pages/QrRedirectPage';
+import { GlobalMotionShell } from './components/GlobalMotionShell';
 import { getProductBySlug } from './data/products';
 
 // Auth Pages (Unified Login & Activation)
@@ -117,6 +118,41 @@ export default function App() {
   const searchParams = new URLSearchParams(currentSearch.replace(/&amp;/g, '&'));
   const hasActivationQuery = Boolean(searchParams.get('token') || searchParams.get('oobCode'));
 
+  // Perfiles públicos NFC y QR dinámicos mantienen su propio tema glass oscuro dedicado
+  if (currentPath.startsWith('/p/')) {
+    const slug = currentPath.replace(/^\/p\//, '');
+    return (
+      <ProfilePage
+        slug={slug}
+        onNavigateHome={() => navigate('/')}
+        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
+      />
+    );
+  }
+
+  if (currentPath.startsWith('/q/')) {
+    const slug = currentPath.replace(/^\/q\//, '');
+    return (
+      <QrRedirectPage
+        slug={slug}
+        onNavigateHome={() => navigate('/')}
+        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
+      />
+    );
+  }
+
+  if (currentPath.startsWith('/demo/')) {
+    const slug = currentPath.replace(/^\/demo\//, '');
+    return (
+      <ProfilePage
+        slug={slug}
+        onNavigateHome={() => navigate('/')}
+        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
+      />
+    );
+  }
+
+  const renderPage = (): React.ReactNode => {
   // =========================================================================
   // PUBLIC AUTHENTICATION & ACTIVATION ROUTES
   // =========================================================================
@@ -302,47 +338,18 @@ export default function App() {
     );
   }
 
-  // Route: Public profile (/p/:slug) - Section 18
-  if (currentPath.startsWith('/p/')) {
-    const slug = currentPath.replace(/^\/p\//, '');
-    return (
-      <ProfilePage
-        slug={slug}
-        onNavigateHome={() => navigate('/')}
-        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
-      />
-    );
-  }
-
-  // Route: Dynamic QR Redirect (/q/:slug)
-  if (currentPath.startsWith('/q/')) {
-    const slug = currentPath.replace(/^\/q\//, '');
-    return (
-      <QrRedirectPage
-        slug={slug}
-        onNavigateHome={() => navigate('/')}
-        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
-      />
-    );
-  }
-
-  // Route: Legacy demo route (/demo/:slug)
-  if (currentPath.startsWith('/demo/')) {
-    const slug = currentPath.replace(/^\/demo\//, '');
-    return (
-      <ProfilePage
-        slug={slug}
-        onNavigateHome={() => navigate('/')}
-        onSelectDemoProfile={(s) => navigate(`/demo/${s}`)}
-      />
-    );
-  }
-
   // Default to HomePage
   return (
     <HomePage
       onNavigate={navigate}
       onOpenDemo={openDemoProfile}
     />
+  );
+  };
+
+  return (
+    <GlobalMotionShell routeKey={currentPath}>
+      {renderPage()}
+    </GlobalMotionShell>
   );
 }

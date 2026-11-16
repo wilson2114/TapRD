@@ -35,20 +35,7 @@ export function HomePage({ onNavigate, onOpenDemo }: HomePageProps) {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-200 overflow-x-clip">
-      {/* Ambient Glassmorphism Background Orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
-        <div className="absolute -top-32 -left-24 w-[460px] h-[460px] rounded-full bg-blue-400/20 dark:bg-blue-600/15 blur-3xl animate-ambient-drift" />
-        <div
-          className="absolute top-[35%] -right-32 w-[520px] h-[520px] rounded-full bg-cyan-400/20 dark:bg-cyan-500/10 blur-3xl animate-ambient-drift"
-          style={{ animationDelay: '-5s' }}
-        />
-        <div
-          className="absolute bottom-[-120px] left-[20%] w-[480px] h-[480px] rounded-full bg-indigo-400/15 dark:bg-indigo-600/15 blur-3xl animate-ambient-drift"
-          style={{ animationDelay: '-9s' }}
-        />
-      </div>
-
+    <div className="relative min-h-screen flex flex-col bg-transparent text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-200 overflow-x-clip">
       {/* Dynamic SEO Tags */}
       <SEOHead
         title="TapRD | Soluciones NFC para negocios"
