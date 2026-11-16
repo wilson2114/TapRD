@@ -196,11 +196,11 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
   const liveOpenStatus = useMemo(() => getCurrentOpenStatus(client.hours), [client.hours]);
 
   const cardSurface =
-    'bg-white dark:bg-slate-900/65 dark:backdrop-blur-xl rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-[0_6px_28px_-6px_rgba(15,23,42,0.07)] dark:shadow-[0_12px_36px_-8px_rgba(0,0,0,0.45)] transition-colors duration-200';
+    'bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/70 dark:border-white/10 shadow-[0_8px_32px_-6px_rgba(15,23,42,0.09)] dark:shadow-[0_14px_40px_-8px_rgba(0,0,0,0.5)] transition-colors duration-200';
 
   return (
     <div className={`${isProfileDark ? 'dark' : ''} min-h-screen w-full flex flex-col items-center font-['Plus_Jakarta_Sans',Inter,sans-serif]`}>
-      <div className="relative min-h-screen w-full bg-[#F8FAFC] dark:bg-[#0B1120] text-[#0F172A] dark:text-slate-100 pb-16 flex flex-col items-center selection:bg-emerald-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
+      <div className="relative min-h-screen w-full bg-[#F8FAFC]/80 dark:bg-[#0B1120]/85 text-[#0F172A] dark:text-slate-100 pb-16 flex flex-col items-center selection:bg-emerald-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
         {/* Glow ambiental sutil en modo oscuro */}
         <div
           aria-hidden="true"
@@ -272,7 +272,7 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
           {/* 1. Cabecera (Hero Section) Dinámica y Adaptable */}
           <section className={`${cardSurface} overflow-hidden`}>
             {/* Franja superior personalizable */}
-            <div className={`h-24 bg-gradient-to-r ${client.coverGradient || 'from-slate-900 via-blue-950 to-slate-900'} relative`}>
+            <div className={`h-28 bg-gradient-to-r ${client.coverGradient || 'from-slate-900 via-blue-950 to-slate-900'} relative`}>
               <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
               {/* Insignia NFC Verificado minimalista */}
               <div className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/20 text-white text-[10px] font-bold tracking-wide">
@@ -282,12 +282,12 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
             </div>
 
             {/* Avatar centrado + Identidad + CTAs */}
-            <div className="px-5 sm:px-6 pb-6 -mt-12 relative flex flex-col items-center text-center">
+            <div className="px-5 sm:px-6 pb-6 -mt-14 sm:-mt-16 relative flex flex-col items-center text-center">
               {/* Avatar / Logo centrado con borde sutil personalizable */}
-              <div className={`p-1 rounded-2xl bg-gradient-to-br ${client.coverGradient || 'from-blue-500/40 to-cyan-400/40'} shadow-lg`}>
+              <div className={`p-1 rounded-3xl bg-gradient-to-br ${client.coverGradient || 'from-blue-500/40 to-cyan-400/40'} shadow-lg`}>
                 {client.logo ? (
                   <ProtectedImage
-                    wrapperClassName="w-22 h-22 sm:w-24 sm:h-24 rounded-[14px] border-[3px] border-white dark:border-[#0B1120] bg-white dark:bg-slate-900"
+                    wrapperClassName="w-28 h-28 sm:w-32 sm:h-32 rounded-[20px] border-[3px] border-white dark:border-[#0B1120] bg-white dark:bg-slate-900"
                     src={client.logo}
                     alt={client.businessName}
                     className="w-full h-full object-cover"
@@ -295,7 +295,7 @@ export function ClientProfile({ client, onNavigateHome, isPreview = false }: Cli
                   />
                 ) : (
                   <div
-                    className={`w-22 h-22 sm:w-24 sm:h-24 rounded-[14px] ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-2xl flex items-center justify-center border-[3px] border-white dark:border-[#0B1120] tracking-wider`}
+                    className={`w-28 h-28 sm:w-32 sm:h-32 rounded-[20px] ${client.avatarBgColor || 'bg-blue-600'} text-white font-black text-3xl flex items-center justify-center border-[3px] border-white dark:border-[#0B1120] tracking-wider`}
                   >
                     {client.avatarInitials || client.businessName.substring(0, 2).toUpperCase()}
                   </div>

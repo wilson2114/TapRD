@@ -118,7 +118,8 @@ export default function App() {
   const searchParams = new URLSearchParams(currentSearch.replace(/&amp;/g, '&'));
   const hasActivationQuery = Boolean(searchParams.get('token') || searchParams.get('oobCode'));
 
-  // Perfiles públicos NFC y QR dinámicos mantienen su propio tema glass oscuro dedicado
+  const renderPage = (): React.ReactNode => {
+  // Perfiles públicos NFC y QR dinámicos
   if (currentPath.startsWith('/p/')) {
     const slug = currentPath.replace(/^\/p\//, '');
     return (
@@ -151,8 +152,6 @@ export default function App() {
       />
     );
   }
-
-  const renderPage = (): React.ReactNode => {
   // =========================================================================
   // PUBLIC AUTHENTICATION & ACTIVATION ROUTES
   // =========================================================================
