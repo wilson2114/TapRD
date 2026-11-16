@@ -212,13 +212,23 @@ export function ProductsPage({ onNavigate, onOpenContact, onOpenDemo }: Products
                       <td className="py-4 px-6 text-xs font-bold text-slate-500 dark:text-slate-400">Acción</td>
                       {PRODUCTS.map((p) => (
                         <td key={p.id} className="py-4 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectProduct(p)}
-                            className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer"
-                          >
-                            Solicitar
-                          </button>
+                          {p.orderAvailable !== false ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectProduct(p)}
+                              className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-xs transition-all cursor-pointer"
+                            >
+                              Solicitar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-bold text-xs cursor-not-allowed"
+                            >
+                              Próximamente
+                            </button>
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -280,13 +290,23 @@ export function ProductsPage({ onNavigate, onOpenContact, onOpenDemo }: Products
                       >
                         Ver detalles
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSelectProduct(prod)}
-                        className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 cursor-pointer"
-                      >
-                        Solicitar
-                      </button>
+                      {prod.orderAvailable !== false ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectProduct(prod)}
+                          className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 cursor-pointer"
+                        >
+                          Solicitar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs cursor-not-allowed"
+                        >
+                          Próximamente
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

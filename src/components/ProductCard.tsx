@@ -11,22 +11,34 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onSelect, onViewDetails, detailed = true }: ProductCardProps) {
+  const isAvailable = product.orderAvailable !== false;
+
   return (
     <div
       id={`product-card-${product.slug || product.id}`}
-      className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-blue-400/80 dark:hover:border-blue-500/80 transition-all duration-300 flex flex-col overflow-hidden group"
+      className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm transition-all duration-300 flex flex-col overflow-hidden group ${
+        isAvailable
+          ? 'hover:shadow-xl hover:border-blue-400/80 dark:hover:border-blue-500/80'
+          : 'opacity-85'
+      }`}
     >
       {/* Product Image / Mockup Frame */}
       <div className="p-4 sm:p-5 pb-2 relative bg-gradient-to-b from-slate-50/80 to-transparent dark:from-slate-800/40">
-        {product.badge && (
+        {!isAvailable ? (
+          <div className="absolute top-6 right-6 z-20">
+            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/95 text-slate-950 shadow-md">
+              Próximamente
+            </span>
+          </div>
+        ) : product.badge ? (
           <div className="absolute top-6 right-6 z-20">
             <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-md">
               <Sparkles className="w-3 h-3" />
               {product.badge}
             </span>
           </div>
-        )}
-        <div className="flex items-center justify-center">
+        ) : null}
+        <div className={`flex items-center justify-center ${!isAvailable ? 'grayscale-[35%]' : ''}`}>
           <ProductMockup type={product.iconType} size="sm" interactive={false} />
         </div>
       </div>
@@ -85,15 +97,26 @@ export function ProductCard({ product, onSelect, onViewDetails, detailed = true 
             <div />
           )}
 
-          <button
-            type="button"
-            id={`btn-solicitar-${product.slug || product.id}`}
-            onClick={() => onSelect(product)}
-            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Solicitar</span>
-          </button>
+          {isAvailable ? (
+            <button
+              type="button"
+              id={`btn-solicitar-${product.slug || product.id}`}
+              onClick={() => onSelect(product)}
+              className="min-h-[44px] py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Solicitar</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              id={`btn-solicitar-${product.slug || product.id}`}
+              className="min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs flex items-center justify-center cursor-not-allowed"
+            >
+              <span>Próximamente</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

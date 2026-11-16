@@ -322,15 +322,11 @@ export function ProductRequestModal({
                     onChange={(e) => setSelectedProduct(e.target.value)}
                     className="w-full min-h-[44px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-blue-700 dark:text-cyan-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all cursor-pointer"
                   >
-                    {PRODUCTS.map((p) => (
+                    {PRODUCTS.filter((p) => p.orderAvailable !== false).map((p) => (
                       <option key={p.id} value={p.name}>
                         {p.name} — {p.price} ({p.category})
                       </option>
                     ))}
-                    <option value="Pack Starter (Desde RD$1,800)">Pack Starter (Desde RD$1,800)</option>
-                    <option value="Pack Business (Desde RD$2,500)">Pack Business (Desde RD$2,500)</option>
-                    <option value="Pack Pro (Cotización personalizada)">Pack Pro (Cotización personalizada)</option>
-                    <option value="Múltiples soluciones personalizadas">Múltiples soluciones personalizadas</option>
                   </select>
                 </div>
 

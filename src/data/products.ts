@@ -59,6 +59,7 @@ export const PRODUCTS: Product[] = [
       warranty: '12 meses de garantía oficial'
     },
     iconType: 'card',
+    orderAvailable: true,
     seoTitle: 'Tap Card | Tarjeta de Presentación Inteligente NFC en RD',
     seoDescription: 'Tu tarjeta de presentación inteligente NFC. Comparte tus datos de contacto, redes sociales y WhatsApp con un solo toque sin instalar apps.'
   },
@@ -110,6 +111,7 @@ export const PRODUCTS: Product[] = [
       warranty: '12 meses'
     },
     iconType: 'plate',
+    orderAvailable: false,
     seoTitle: 'Tap Business | Placa NFC para Mostradores y Negocios en RD',
     seoDescription: 'Placa NFC para mostradores comerciales. Conecta a tus clientes con tu menú digital, catálogo, WhatsApp, Instagram y ubicación al instante.'
   },
@@ -158,6 +160,7 @@ export const PRODUCTS: Product[] = [
       warranty: '12 meses'
     },
     iconType: 'star',
+    orderAvailable: false,
     seoTitle: 'Tap Review | Solución NFC para Enlace de Reseñas en RD',
     seoDescription: 'Facilita que tus clientes encuentren tu página de reseñas y compartan su experiencia en un toque con tecnología NFC y QR.'
   },
@@ -205,6 +208,7 @@ export const PRODUCTS: Product[] = [
       warranty: '6 meses'
     },
     iconType: 'sticker',
+    orderAvailable: false,
     seoTitle: 'Tap Sticker | Stickers Inteligentes NFC en República Dominicana',
     seoDescription: 'Stickers adhesivos NFC para mostradores, vehículos, empaques y mesas. Comparte tus enlaces e información al instante con un toque.'
   }
