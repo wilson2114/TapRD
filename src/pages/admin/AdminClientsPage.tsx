@@ -34,7 +34,10 @@ import {
   X,
   Share2,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  QrCode,
+  Users
 } from 'lucide-react';
 import { ClientAccessStatus } from '../../types/client';
 import { auth, isFirebaseConfigured } from '../../lib/firebase';
@@ -49,6 +52,7 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
   const [clients, setClients] = useState<Client[]>(() => getClients());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ClientStatus>('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'views' | 'name'>('recent');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
@@ -307,22 +311,71 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
     }
   };
 
-  // Filtrar clientes
-  const normalizedTerm = normalizeLocationText(searchTerm);
-  const filteredClients = clients.filter((c) => {
-    const prov = getProvinceByCity(c.city || '') || '';
-    const matchesSearch =
-      !normalizedTerm ||
-      normalizeLocationText(c.businessName || '').includes(normalizedTerm) ||
-      normalizeLocationText(c.ownerName || '').includes(normalizedTerm) ||
-      normalizeLocationText(c.city || '').includes(normalizedTerm) ||
-      normalizeLocationText(prov).includes(normalizedTerm) ||
-      normalizeLocationText(c.category || '').includes(normalizedTerm) ||
-      normalizeLocationText(c.slug || '').includes(normalizedTerm);
+  // Contadores rápidos
+  const activeCount = clients.filter((c) => c.status === 'active').length;
+  const pendingCount = clients.filter((c) => c.status === 'pending').length;
+  const inactiveCount = clients.filter((c) => c.status === 'inactive').length;
+  const totalViewsCount = clients.reduce((sum, c) => sum + (c.viewsCount || 0), 0);
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Filtrar y ordenar clientes
+  const normalizedTerm = normalizeLocationText(searchTerm);
+  const filteredClients = clients
+    .filter((c) => {
+      const prov = getProvinceByCity(c.city || '') || '';
+      const matchesSearch =
+        !normalizedTerm ||
+        normalizeLocationText(c.businessName || '').includes(normalizedTerm) ||
+        normalizeLocationText(c.ownerName || '').includes(normalizedTerm) ||
+        normalizeLocationText(c.city || '').includes(normalizedTerm) ||
+        normalizeLocationText(prov).includes(normalizedTerm) ||
+        normalizeLocationText(c.category || '').includes(normalizedTerm) ||
+        normalizeLocationText(c.slug || '').includes(normalizedTerm) ||
+        normalizeLocationText(c.email || c.clientEmail || '').includes(normalizedTerm) ||
+        (c.whatsapp || '').toLowerCase().includes(normalizedTerm);
+
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'views') {
+        return (b.viewsCount || 0) - (a.viewsCount || 0);
+      }
+      if (sortBy === 'name') {
+        return (a.businessName || '').localeCompare(b.businessName || '', 'es');
+      }
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+
+  const handleExportCsv = () => {
+    const headers = ['Negocio', 'Propietario', 'Correo', 'WhatsApp', 'Ciudad', 'Categoria', 'Plan', 'Estado', 'Vistas', 'Enlace Publico'];
+    const escapeCell = (val: string | number | undefined) =>
+      `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    const rows = filteredClients.map((c) => [
+      escapeCell(c.businessName),
+      escapeCell(c.ownerName),
+      escapeCell(c.clientEmail || c.email),
+      escapeCell(c.whatsapp),
+      escapeCell(c.city),
+      escapeCell(c.category),
+      escapeCell(c.plan || 'starter'),
+      escapeCell(c.status),
+      escapeCell(c.viewsCount || 0),
+      escapeCell(`${PUBLIC_BASE_URL}/p/${c.slug}`)
+    ].join(','));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clientes-taprd-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Exportados ${filteredClients.length} clientes a CSV`);
+  };
 
   const getStatusBadge = (status: ClientStatus) => {
     switch (status) {
@@ -396,22 +449,33 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleExportCsv}
+            disabled={filteredClients.length === 0}
+            title="Exportar lista filtrada a CSV"
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+            <span className="hidden sm:inline">Exportar CSV</span>
+          </button>
+
+          <button
+            type="button"
             onClick={refreshClients}
             disabled={isRefreshing}
             title="Sincronizar con Cloud Firestore"
             className="p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
-            <span className="hidden sm:inline">Sincronizar Firestore</span>
+            <span className="hidden sm:inline">Sincronizar</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('/admin/clientes/nuevo')}
-            className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all cursor-pointer"
+            className="py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Crear cliente</span>
+            <span>Crear cliente</span>
           </button>
         </div>
       }
@@ -433,43 +497,126 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
             <span>{toastMessage.text}</span>
           </div>
         )}
+
+        {/* KPI Summary Strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-white dark:bg-slate-900 border-blue-500 ring-2 ring-blue-500/15 shadow-sm'
+                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-bold">
+              <span>Total Clientes</span>
+              <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <p className="text-2xl font-black text-slate-950 dark:text-white mt-1">{clients.length}</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+              statusFilter === 'active'
+                ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-2 ring-emerald-500/15 shadow-sm'
+                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-bold">
+              <span>Perfiles Activos</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{activeCount}</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter(inactiveCount > 0 && pendingCount === 0 ? 'inactive' : 'pending')}
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+              statusFilter === 'pending' || statusFilter === 'inactive'
+                ? 'bg-white dark:bg-slate-900 border-amber-500 ring-2 ring-amber-500/15 shadow-sm'
+                : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-bold">
+              <span>Pausados / Pend.</span>
+              <Power className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{inactiveCount + pendingCount}</p>
+          </button>
+
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-bold">
+              <span>Vistas Totales</span>
+              <Eye className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+            </div>
+            <p className="text-2xl font-black text-slate-950 dark:text-white mt-1">{totalViewsCount.toLocaleString('es-DO')}</p>
+          </div>
+        </div>
         
-        {/* Search & Filter Controls */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Search, Filter & Sort Controls */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           
           {/* Search Input */}
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full lg:w-80">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar cliente, negocio, categoría..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs sm:text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all"
+              placeholder="Buscar negocio, correo, WhatsApp, slug..."
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs sm:text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 transition-all"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Filter Tabs (Todos, Activos, Pendientes, Inactivos) */}
-          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'active', label: 'Activos' },
-              { id: 'pending', label: 'Pendientes' },
-              { id: 'inactive', label: 'Inactivos' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id as any)}
-                className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  statusFilter === tab.id
-                    ? 'bg-slate-900 dark:bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between lg:justify-end gap-2.5">
+            {/* Filter Tabs (Todos, Activos, Pendientes, Inactivos) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {[
+                { id: 'all', label: `Todos (${clients.length})` },
+                { id: 'active', label: `Activos (${activeCount})` },
+                { id: 'pending', label: `Pendientes (${pendingCount})` },
+                { id: 'inactive', label: `Inactivos (${inactiveCount})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id as any)}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    statusFilter === tab.id
+                      ? 'bg-slate-900 dark:bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort Selector */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'recent' | 'views' | 'name')}
+              aria-label="Ordenar clientes"
+              className="py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden focus:border-blue-500 cursor-pointer"
+            >
+              <option value="recent">Más recientes</option>
+              <option value="views">Más vistas</option>
+              <option value="name">Nombre (A–Z)</option>
+            </select>
           </div>
 
         </div>
@@ -503,7 +650,7 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                       <th className="py-3.5 px-4">WhatsApp</th>
                       <th className="py-3.5 px-4">Perfil</th>
                       <th className="py-3.5 px-4">Acceso Portal</th>
-                      <th className="py-3.5 px-4">Creación</th>
+                      <th className="py-3.5 px-4">Plan & Vistas</th>
                       <th className="py-3.5 px-6 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -565,25 +712,39 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
                           {getAccessStatusBadge(client.accessStatus, client.userId)}
                         </td>
 
-                        {/* Fecha */}
-                        <td className="py-4 px-4 text-slate-400 dark:text-slate-500 font-mono text-[11px]">
-                          {new Date(client.createdAt).toLocaleDateString('es-DO')}
+                        {/* Plan & Vistas */}
+                        <td className="py-4 px-4">
+                          <span className="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {client.plan || 'starter'}
+                          </span>
+                          <span className="block text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-1">
+                            {(client.viewsCount || 0).toLocaleString('es-DO')} vistas
+                          </span>
                         </td>
 
-                        {/* Acciones: Ver, Editar, Copiar enlace, Reenviar invitación, Desactivar, Eliminar */}
+                        {/* Acciones: Ver, Editar, Copiar enlace, QR, Reenviar invitación, Desactivar, Eliminar */}
                         <td className="py-4 px-6 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
                               onClick={() => handleCopyLink(client.slug, client.id)}
                               className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                              title="Copiar enlace público"
+                              title="Copiar enlace público (/p/slug)"
                             >
                               {copiedId === client.id ? (
                                 <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                               ) : (
                                 <Copy className="w-4 h-4" />
                               )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => window.open(`${PUBLIC_BASE_URL}/q/${client.slug}`, '_blank')}
+                              className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/60 transition-colors cursor-pointer"
+                              title="Probar QR Dinámico (/q/slug)"
+                            >
+                              <QrCode className="w-4 h-4" />
                             </button>
 
                             <button
