@@ -427,6 +427,25 @@ export function ClientSettingsPage({ onNavigate }: ClientSettingsPageProps) {
           </div>
         </div>
 
+        {/* Zona de Peligro: Eliminar cuenta */}
+        <div className="bg-rose-50/70 dark:bg-rose-950/20 rounded-3xl p-6 sm:p-8 border border-rose-200 dark:border-rose-900/50 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-sm font-black text-rose-800 dark:text-rose-300">
+              Eliminar cuenta y negocio
+            </h2>
+            <p className="text-xs text-rose-700/80 dark:text-rose-400/90 max-w-xl">
+              Si ya no deseas usar TapRD, puedes solicitar la baja y eliminación permanente de tu cuenta y perfil público desde el centro de privacidad.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('/cliente/privacidad')}
+            className="min-h-[42px] py-2.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer"
+          >
+            Eliminar cuenta
+          </button>
+        </div>
+
       </div>
     </ClientLayout>
   );

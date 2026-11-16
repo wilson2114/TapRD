@@ -225,7 +225,7 @@ export function AuthModal({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@taprd.com o tu email registrado"
+                    placeholder="correo@ejemplo.com"
                     autoComplete="email"
                     className="w-full min-h-[44px] pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs sm:text-sm placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 shadow-2xs transition-all"
                   />

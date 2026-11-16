@@ -238,7 +238,7 @@ export function AdminClientsPage({ onNavigate, onOpenPreview }: AdminClientsPage
         setConfirmDialog(null);
         setIsDeletingClientId(id);
         try {
-          const deleted = await deleteClient(id);
+          const deleted = await deleteClient(id, true);
           if (deleted) {
             setClients(prev => prev.filter(c => c.id !== id));
             showToast('Cliente eliminado correctamente');

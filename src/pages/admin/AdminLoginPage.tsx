@@ -156,7 +156,7 @@ export function AdminLoginPage({ onNavigate }: AdminLoginPageProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@taprd.com o tu email de propietario"
+                  placeholder="correo@ejemplo.com"
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[44px]"
                 />
               </div>
