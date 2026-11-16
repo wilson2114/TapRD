@@ -12,7 +12,7 @@ interface ContactFormProps {
 }
 
 export function ContactForm({
-  initialProductInterest = 'Tap Card',
+  initialProductInterest = 'Tap Card (Desde RD$1,800)',
   isModal = false,
   onClose,
   title = 'Solicitar Cotización',
@@ -24,7 +24,7 @@ export function ContactForm({
     phone: '',
     email: '',
     businessType: 'Barbería / Salón',
-    productInterest: initialProductInterest,
+    productInterest: initialProductInterest.includes('Tap Card') ? 'Tap Card (Desde RD$1,800)' : 'Tap Card (Desde RD$1,800)',
     message: ''
   });
 
@@ -45,12 +45,7 @@ export function ContactForm({
   ];
 
   const productOptions = [
-    'Tap Card (Desde RD$1,800)',
-    'Tap Business (Desde RD$2,500)',
-    'Tap Review (Desde RD$1,500)',
-    'Tap Sticker (Desde RD$500)',
-    'Combo Multi-solución (Varios productos)',
-    'Solución a medida para franquicias o corporativos'
+    'Tap Card (Desde RD$1,800)'
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
