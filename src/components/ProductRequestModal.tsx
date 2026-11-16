@@ -306,6 +306,7 @@ export function ProductRequestModal({
                     <option value="Clínica / Salud / Odontología">Clínica / Salud / Odontología</option>
                     <option value="Hotel / Hospedaje / Airbnb">Hotel / Hospedaje / Airbnb</option>
                     <option value="Taller / Servicios Técnicos">Taller / Servicios Técnicos</option>
+                    <option value="Desarrollador Web">Desarrollador Web</option>
                     <option value="Otro sector">Otro sector</option>
                   </select>
                 </div>

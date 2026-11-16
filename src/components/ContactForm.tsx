@@ -39,6 +39,7 @@ export function ContactForm({
     'Consultor / Profesional Independiente',
     'Hotel / Hospedaje',
     'Salud / Clínica / Odontología',
+    'Desarrollador Web',
     'Otro tipo de negocio'
   ];
 

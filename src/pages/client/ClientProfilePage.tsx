@@ -43,6 +43,7 @@ const CATEGORIES = [
   'Cafetería',
   'Taller & Mecánica',
   'Servicios Profesionales',
+  'Desarrollador Web',
   'Comercio / Tienda',
   'Otro'
 ];
