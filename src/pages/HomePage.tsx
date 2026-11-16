@@ -12,6 +12,7 @@ import { CTASection } from '../components/CTASection';
 import { ContactForm } from '../components/ContactForm';
 import { Footer } from '../components/Footer';
 import { SEOHead } from '../components/SEOHead';
+import { ScrollReveal } from '../components/ScrollReveal';
 import { PRODUCTS, BUSINESS_CATEGORIES } from '../data/mockData';
 import { Product } from '../types';
 
@@ -34,7 +35,20 @@ export function HomePage({ onNavigate, onOpenDemo }: HomePageProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-200">
+    <div className="relative min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-blue-600 selection:text-white transition-colors duration-200 overflow-x-clip">
+      {/* Ambient Glassmorphism Background Orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
+        <div className="absolute -top-32 -left-24 w-[460px] h-[460px] rounded-full bg-blue-400/20 dark:bg-blue-600/15 blur-3xl animate-ambient-drift" />
+        <div
+          className="absolute top-[35%] -right-32 w-[520px] h-[520px] rounded-full bg-cyan-400/20 dark:bg-cyan-500/10 blur-3xl animate-ambient-drift"
+          style={{ animationDelay: '-5s' }}
+        />
+        <div
+          className="absolute bottom-[-120px] left-[20%] w-[480px] h-[480px] rounded-full bg-indigo-400/15 dark:bg-indigo-600/15 blur-3xl animate-ambient-drift"
+          style={{ animationDelay: '-9s' }}
+        />
+      </div>
+
       {/* Dynamic SEO Tags */}
       <SEOHead
         title="TapRD | Soluciones NFC para negocios"
@@ -48,54 +62,76 @@ export function HomePage({ onNavigate, onOpenDemo }: HomePageProps) {
         onOpenContact={() => handleOpenContact()}
       />
 
-      <main className="flex-1">
+      <main className="relative z-10 flex-1">
         {/* 1. Hero */}
-        <Hero
-          onViewProducts={() => onNavigate('/productos')}
-          onOpenQuote={() => handleOpenContact()}
-          onOpenDemo={onOpenDemo}
-        />
+        <div className="animate-hero-enter">
+          <Hero
+            onViewProducts={() => onNavigate('/productos')}
+            onOpenQuote={() => handleOpenContact()}
+            onOpenDemo={onOpenDemo}
+          />
+        </div>
 
         {/* 2. ¿Cómo Funciona? */}
-        <HowItWorks onSelectProduct={() => onNavigate('/productos')} />
+        <ScrollReveal delayMs={40}>
+          <HowItWorks onSelectProduct={() => onNavigate('/productos')} />
+        </ScrollReveal>
 
         {/* 3. Nuestros Productos */}
-        <ProductGrid
-          products={PRODUCTS}
-          onSelectProduct={handleSelectProduct}
-          onViewDetails={(prod) => onNavigate(prod.route)}
-        />
+        <ScrollReveal delayMs={60}>
+          <ProductGrid
+            products={PRODUCTS}
+            onSelectProduct={handleSelectProduct}
+            onViewDetails={(prod) => onNavigate(prod.route)}
+          />
+        </ScrollReveal>
 
         {/* 4. Un Solo Toque */}
-        <OneTouchFlow />
+        <ScrollReveal delayMs={60}>
+          <OneTouchFlow />
+        </ScrollReveal>
 
         {/* 5. Perfil Digital (Demo Barbería Wilson) */}
-        <DigitalProfilePreviewCard onOpenFullDemo={onOpenDemo} />
+        <ScrollReveal delayMs={60}>
+          <DigitalProfilePreviewCard onOpenFullDemo={onOpenDemo} />
+        </ScrollReveal>
 
         {/* 6. Para Todo Tipo de Negocio */}
-        <BusinessCategoryCard
-          categories={BUSINESS_CATEGORIES}
-          onOpenDemo={onOpenDemo}
-        />
+        <ScrollReveal delayMs={60}>
+          <BusinessCategoryCard
+            categories={BUSINESS_CATEGORIES}
+            onOpenDemo={onOpenDemo}
+          />
+        </ScrollReveal>
 
         {/* 7. Ventajas */}
-        <Advantages />
+        <ScrollReveal delayMs={60}>
+          <Advantages />
+        </ScrollReveal>
 
         {/* 8. Preguntas Frecuentes */}
-        <FAQSection onContactSupport={() => handleOpenContact('Asesoría personalizada')} />
+        <ScrollReveal delayMs={60}>
+          <FAQSection onContactSupport={() => handleOpenContact('Asesoría personalizada')} />
+        </ScrollReveal>
 
         {/* 9. Standalone Contact Form Section */}
-        <ContactForm initialProductInterest={selectedProductInterest} />
+        <ScrollReveal delayMs={60}>
+          <ContactForm initialProductInterest={selectedProductInterest} />
+        </ScrollReveal>
 
         {/* 10. Call to Action Banner */}
-        <CTASection onOpenContact={() => handleOpenContact()} />
+        <ScrollReveal delayMs={60}>
+          <CTASection onOpenContact={() => handleOpenContact()} />
+        </ScrollReveal>
       </main>
 
       {/* Footer */}
-      <Footer
-        onNavigate={onNavigate}
-        onOpenContact={() => handleOpenContact()}
-      />
+      <ScrollReveal once>
+        <Footer
+          onNavigate={onNavigate}
+          onOpenContact={() => handleOpenContact()}
+        />
+      </ScrollReveal>
 
       {/* Modal Contact Form Triggered by Top Navbar or Buttons */}
       {contactModalOpen && (

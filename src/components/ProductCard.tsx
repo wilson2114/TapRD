@@ -16,9 +16,9 @@ export function ProductCard({ product, onSelect, onViewDetails, detailed = true 
   return (
     <div
       id={`product-card-${product.slug || product.id}`}
-      className={`bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm transition-all duration-300 flex flex-col overflow-hidden group ${
+      className={`glass-surface rounded-3xl shadow-sm transition-all duration-300 flex flex-col overflow-hidden group ${
         isAvailable
-          ? 'hover:shadow-xl hover:border-blue-400/80 dark:hover:border-blue-500/80'
+          ? 'hover:shadow-xl hover:-translate-y-1 hover:border-blue-400/80 dark:hover:border-blue-500/80'
           : 'opacity-85'
       }`}
     >
