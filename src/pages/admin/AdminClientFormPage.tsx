@@ -319,6 +319,65 @@ export function AdminClientFormPage({ clientId, onNavigate }: AdminClientFormPag
             .catch(console.warn);
         }
       });
+    } else if (typeof window !== 'undefined') {
+      try {
+        const rawPrefill = window.sessionStorage.getItem('taprd_quote_prefill_client');
+        if (rawPrefill) {
+          window.sessionStorage.removeItem('taprd_quote_prefill_client');
+          const prefill = JSON.parse(rawPrefill) as {
+            ownerName?: string;
+            businessName?: string;
+            phone?: string;
+            whatsapp?: string;
+            email?: string;
+            businessType?: string;
+            city?: string;
+            productInterest?: string;
+          };
+
+          if (prefill.ownerName) setOwnerName(prefill.ownerName);
+          if (prefill.businessName) {
+            setBusinessName(prefill.businessName);
+            setSlug(generateSlug(prefill.businessName));
+          }
+          if (prefill.phone) setPhone(prefill.phone);
+          if (prefill.whatsapp || prefill.phone) setWhatsapp(prefill.whatsapp || prefill.phone || '');
+          if (prefill.email) {
+            setEmail(prefill.email);
+            setClientAccessEmail(prefill.email);
+          }
+          if (prefill.city) {
+            const matchedCity = CITIES.find(
+              (c) => c.toLowerCase() === prefill.city?.trim().toLowerCase()
+            );
+            setCity(matchedCity || prefill.city);
+          }
+          if (prefill.businessType) {
+            const bt = prefill.businessType.toLowerCase();
+            if (bt.includes('barber')) setCategory('Barbería');
+            else if (bt.includes('restaurante') || bt.includes('bar')) setCategory('Restaurante');
+            else if (bt.includes('cafeter')) setCategory('Cafetería');
+            else if (bt.includes('inmobiliari') || bt.includes('bienes')) setCategory('Inmobiliaria');
+            else if (bt.includes('salón') || bt.includes('salon') || bt.includes('belleza')) setCategory('Salón de belleza');
+            else if (bt.includes('médic') || bt.includes('clínica') || bt.includes('clinica') || bt.includes('salud') || bt.includes('odont')) setCategory('Consultorio Médico');
+            else if (bt.includes('legal') || bt.includes('abogad')) setCategory('Estudio Legal');
+            else if (bt.includes('taller') || bt.includes('mecánic') || bt.includes('técnic')) setCategory('Taller & Mecánica');
+            else if (bt.includes('desarrollador') || bt.includes('web')) setCategory('Desarrollador Web');
+            else if (bt.includes('comercio') || bt.includes('tienda') || bt.includes('retail')) setCategory('Comercio / Tienda');
+            else if (bt.includes('consultor') || bt.includes('profesional')) setCategory('Servicios Profesionales');
+            else setCategory('Otro');
+          }
+          if (prefill.productInterest) {
+            const pi = prefill.productInterest.toLowerCase();
+            if (pi.includes('business')) setProductAssigned('Tap Business');
+            else if (pi.includes('review')) setProductAssigned('Tap Review');
+            else if (pi.includes('sticker')) setProductAssigned('Tap Sticker');
+            else setProductAssigned('Tap Card');
+          }
+        }
+      } catch {
+        // Ignorar errores leyendo prefill
+      }
     }
   }, [clientId]);
 

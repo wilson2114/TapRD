@@ -157,6 +157,28 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
     }
   };
 
+  const handleCreateClientFromQuote = (item: QuoteRequest) => {
+    try {
+      window.sessionStorage.setItem(
+        'taprd_quote_prefill_client',
+        JSON.stringify({
+          quoteId: item.id,
+          ownerName: item.name || '',
+          businessName: item.businessName || item.name || '',
+          phone: item.phone || '',
+          whatsapp: item.phone || '',
+          email: item.email || '',
+          businessType: item.businessType || '',
+          city: item.city || '',
+          productInterest: item.productInterest || 'Tap Card'
+        })
+      );
+    } catch {
+      // Ignorar si sessionStorage no está disponible
+    }
+    onNavigate('/admin/clientes/nuevo');
+  };
+
   const formatDate = (iso?: string) => {
     if (!iso) return 'Reciente';
     try {
@@ -487,7 +509,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
                       </button>
                       <button
                         type="button"
-                        onClick={() => onNavigate('/admin/clientes/nuevo')}
+                        onClick={() => handleCreateClientFromQuote(item)}
                         className="min-h-[36px] px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
