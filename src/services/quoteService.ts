@@ -8,7 +8,7 @@ import {
   onSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../lib/firebase';
+import { db, isFirebaseConfigured, auth } from '../lib/firebase';
 
 export type QuoteRequestSource = 'contact_form' | 'product_modal' | 'contact_page';
 export type QuoteRequestStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded';
@@ -86,8 +86,23 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return result as Partial<T>;
 }
 
+async function getAdminAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const token = await auth?.currentUser?.getIdToken?.();
+    if (token) {
+      return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      };
+    }
+  } catch {
+    // Ignorar si no hay usuario Firebase autenticado
+  }
+  return { 'Content-Type': 'application/json' };
+}
+
 /**
- * Guarda una nueva solicitud de cotización en Firestore (y respaldo local).
+ * Guarda una nueva solicitud de cotización en Firestore (con respaldo automático vía API servidor y local).
  */
 export async function createQuoteRequest(input: CreateQuoteRequestInput): Promise<QuoteRequest> {
   const now = new Date().toISOString();
@@ -109,9 +124,15 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
     updatedAt: now
   });
 
+  // 1. Intentar escritura directa en Firestore
   if (isFirebaseConfigured) {
     try {
-      const ref = await addDoc(collection(db, COLLECTION_NAME), payload);
+      const ref = await Promise.race([
+        addDoc(collection(db, COLLECTION_NAME), payload),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('firestore-timeout')), 4500)
+        )
+      ]);
       const created: QuoteRequest = {
         ...(payload as Omit<QuoteRequest, 'id'>),
         id: ref.id
@@ -120,12 +141,28 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
       saveLocalQuotes([created, ...existing.filter((q) => q.id !== created.id)]);
       return created;
     } catch (err) {
-      console.error('Error guardando solicitud de cotización en Firestore:', err);
-      throw err;
+      console.warn('Firestore directo falló para quoteRequests, intentando vía /api/public/quotes:', err);
     }
   }
 
-  // Respaldo local si Firebase no está configurado
+  // 2. Respaldo automático vía API backend (Firebase Admin SDK)
+  try {
+    const res = await fetch('/api/public/quotes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const created = (await res.json()) as QuoteRequest;
+      const existing = readLocalQuotes();
+      saveLocalQuotes([created, ...existing.filter((q) => q.id !== created.id)]);
+      return created;
+    }
+  } catch (apiErr) {
+    console.warn('Fallback /api/public/quotes no disponible, guardando respaldo local:', apiErr);
+  }
+
+  // 3. Respaldo local garantizado para no bloquear nunca al visitante
   const localItem: QuoteRequest = {
     ...(payload as Omit<QuoteRequest, 'id'>),
     id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -149,9 +186,23 @@ export async function getQuoteRequests(): Promise<QuoteRequest[]> {
       saveLocalQuotes(sorted);
       return sorted;
     } catch (err) {
-      console.warn('Error cargando solicitudes desde Firestore, usando respaldo local:', err);
+      console.warn('Error cargando solicitudes desde Firestore, intentando /api/admin/quotes:', err);
     }
   }
+
+  try {
+    const headers = await getAdminAuthHeaders();
+    const res = await fetch('/api/admin/quotes', { headers });
+    if (res.ok) {
+      const json = (await res.json()) as { items?: QuoteRequest[] };
+      const sorted = sortByNewest(json.items || []);
+      saveLocalQuotes(sorted);
+      return sorted;
+    }
+  } catch {
+    // Usar respaldo local si no hay conexión o endpoint
+  }
+
   return sortByNewest(readLocalQuotes());
 }
 
@@ -178,8 +229,21 @@ export function subscribeQuoteRequests(
       saveLocalQuotes(sorted);
       onData(sorted);
     },
-    (err) => {
-      console.warn('Error en suscripción de quoteRequests:', err);
+    async (err) => {
+      console.warn('Error en suscripción de quoteRequests, usando respaldo API/local:', err);
+      try {
+        const headers = await getAdminAuthHeaders();
+        const res = await fetch('/api/admin/quotes', { headers });
+        if (res.ok) {
+          const json = (await res.json()) as { items?: QuoteRequest[] };
+          const sorted = sortByNewest(json.items || []);
+          saveLocalQuotes(sorted);
+          onData(sorted);
+          return;
+        }
+      } catch {
+        // Ignorar y pasar a respaldo local
+      }
       onData(sortByNewest(readLocalQuotes()));
       onError?.(err);
     }
@@ -200,7 +264,16 @@ export async function updateQuoteRequest(
   });
 
   if (isFirebaseConfigured && !id.startsWith('local_')) {
-    await updateDoc(doc(db, COLLECTION_NAME, id), payload);
+    try {
+      await updateDoc(doc(db, COLLECTION_NAME, id), payload);
+    } catch {
+      const headers = await getAdminAuthHeaders();
+      await fetch(`/api/admin/quotes/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(payload)
+      });
+    }
   }
 
   const local = readLocalQuotes().map((q) => (q.id === id ? { ...q, ...payload } : q));
@@ -212,7 +285,15 @@ export async function updateQuoteRequest(
  */
 export async function deleteQuoteRequest(id: string): Promise<void> {
   if (isFirebaseConfigured && !id.startsWith('local_')) {
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
+    try {
+      await deleteDoc(doc(db, COLLECTION_NAME, id));
+    } catch {
+      const headers = await getAdminAuthHeaders();
+      await fetch(`/api/admin/quotes/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers
+      });
+    }
   }
   saveLocalQuotes(readLocalQuotes().filter((q) => q.id !== id));
 }

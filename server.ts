@@ -15,6 +15,12 @@ import {
   getClientAnalyticsHandler,
   trackPublicAnalyticsHandler
 } from './server/clientAccessController';
+import {
+  createPublicQuoteHandler,
+  listAdminQuotesHandler,
+  updateAdminQuoteHandler,
+  deleteAdminQuoteHandler
+} from './server/quoteController';
 
 function isAllowedCorsOrigin(origin: string, requestHost: string): boolean {
   try {
@@ -117,6 +123,10 @@ async function startServer() {
   app.post('/api/client/complete-activation', completeActivationHandler);
   app.get('/api/client/analytics', getClientAnalyticsHandler);
   app.post('/api/public/analytics/track', trackPublicAnalyticsHandler);
+  app.post('/api/public/quotes', createPublicQuoteHandler);
+  app.get('/api/admin/quotes', listAdminQuotesHandler);
+  app.patch('/api/admin/quotes/:id', updateAdminQuoteHandler);
+  app.delete('/api/admin/quotes/:id', deleteAdminQuoteHandler);
 
   // Garantía: Si alguna ruta /api/* no coincide, devolver siempre JSON y nunca HTML
   app.all('/api/*', (req, res) => {
