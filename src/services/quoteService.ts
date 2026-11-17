@@ -5,10 +5,12 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  query,
+  where,
   onSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured, auth } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 
 export type QuoteRequestSource = 'contact_form' | 'product_modal' | 'contact_page';
 export type QuoteRequestStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded';
@@ -30,6 +32,7 @@ export interface QuoteRequest {
   adminNotes?: string;
   createdAt: string;
   updatedAt?: string;
+  storageCollection?: 'quoteRequests' | 'reports';
 }
 
 export interface CreateQuoteRequestInput {
@@ -47,6 +50,7 @@ export interface CreateQuoteRequestInput {
 }
 
 const COLLECTION_NAME = 'quoteRequests';
+const REPORTS_FALLBACK_COLLECTION = 'reports';
 const LOCAL_STORAGE_KEY = 'taprd_quote_requests_v1';
 
 function readLocalQuotes(): QuoteRequest[] {
@@ -78,6 +82,16 @@ function sortByNewest(items: QuoteRequest[]): QuoteRequest[] {
   });
 }
 
+function mergeQuotes(...lists: QuoteRequest[][]): QuoteRequest[] {
+  const map = new Map<string, QuoteRequest>();
+  lists.forEach((list) => {
+    list.forEach((item) => {
+      if (item && item.id) map.set(item.id, item);
+    });
+  });
+  return sortByNewest(Array.from(map.values()));
+}
+
 function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const result: Record<string, unknown> = {};
   Object.entries(obj).forEach(([k, v]) => {
@@ -86,23 +100,8 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return result as Partial<T>;
 }
 
-async function getAdminAuthHeaders(): Promise<Record<string, string>> {
-  try {
-    const token = await auth?.currentUser?.getIdToken?.();
-    if (token) {
-      return {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      };
-    }
-  } catch {
-    // Ignorar si no hay usuario Firebase autenticado
-  }
-  return { 'Content-Type': 'application/json' };
-}
-
 /**
- * Guarda una nueva solicitud de cotización en Firestore (con respaldo automático vía API servidor y local).
+ * Guarda una nueva solicitud de cotización en Firestore (quoteRequests o respaldo en reports) + local.
  */
 export async function createQuoteRequest(input: CreateQuoteRequestInput): Promise<QuoteRequest> {
   const now = new Date().toISOString();
@@ -124,8 +123,8 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
     updatedAt: now
   });
 
-  // 1. Intentar escritura directa en Firestore
   if (isFirebaseConfigured) {
+    // 1. Intentar colección principal quoteRequests
     try {
       const ref = await Promise.race([
         addDoc(collection(db, COLLECTION_NAME), payload),
@@ -135,75 +134,86 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
       ]);
       const created: QuoteRequest = {
         ...(payload as Omit<QuoteRequest, 'id'>),
-        id: ref.id
+        id: ref.id,
+        storageCollection: COLLECTION_NAME
       };
-      const existing = readLocalQuotes();
-      saveLocalQuotes([created, ...existing.filter((q) => q.id !== created.id)]);
+      saveLocalQuotes(mergeQuotes([created], readLocalQuotes()));
       return created;
     } catch (err) {
-      console.warn('Firestore directo falló para quoteRequests, intentando vía /api/public/quotes:', err);
+      console.warn('quoteRequests rechazado/no disponible, usando colección reports en Firestore:', err);
     }
-  }
 
-  // 2. Respaldo automático vía API backend (Firebase Admin SDK)
-  try {
-    const res = await fetch('/api/public/quotes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      const created = (await res.json()) as QuoteRequest;
-      const existing = readLocalQuotes();
-      saveLocalQuotes([created, ...existing.filter((q) => q.id !== created.id)]);
+    // 2. Respaldo en Firestore sobre reports (regla pública ya activa en producción)
+    try {
+      const ref = await Promise.race([
+        addDoc(collection(db, REPORTS_FALLBACK_COLLECTION), {
+          ...payload,
+          type: 'quote_request'
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('firestore-timeout')), 4500)
+        )
+      ]);
+      const created: QuoteRequest = {
+        ...(payload as Omit<QuoteRequest, 'id'>),
+        id: ref.id,
+        storageCollection: REPORTS_FALLBACK_COLLECTION
+      };
+      saveLocalQuotes(mergeQuotes([created], readLocalQuotes()));
       return created;
+    } catch (fallbackErr) {
+      console.warn('Fallback en Firestore reports falló, guardando en localStorage:', fallbackErr);
     }
-  } catch (apiErr) {
-    console.warn('Fallback /api/public/quotes no disponible, guardando respaldo local:', apiErr);
   }
 
-  // 3. Respaldo local garantizado para no bloquear nunca al visitante
+  // 3. Respaldo local garantizado
   const localItem: QuoteRequest = {
     ...(payload as Omit<QuoteRequest, 'id'>),
     id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   };
-  saveLocalQuotes([localItem, ...readLocalQuotes()]);
+  saveLocalQuotes(mergeQuotes([localItem], readLocalQuotes()));
   return localItem;
 }
 
 /**
- * Obtiene todas las solicitudes de cotización ordenadas de más reciente a más antigua.
+ * Obtiene todas las solicitudes de cotización desde Firestore (quoteRequests + reports) y respaldo local.
  */
 export async function getQuoteRequests(): Promise<QuoteRequest[]> {
+  let primaryItems: QuoteRequest[] = [];
+  let fallbackItems: QuoteRequest[] = [];
+
   if (isFirebaseConfigured) {
     try {
       const snap = await getDocs(collection(db, COLLECTION_NAME));
-      const items: QuoteRequest[] = snap.docs.map((d) => ({
+      primaryItems = snap.docs.map((d) => ({
         ...(d.data() as Omit<QuoteRequest, 'id'>),
-        id: d.id
+        id: d.id,
+        storageCollection: COLLECTION_NAME
       }));
-      const sorted = sortByNewest(items);
-      saveLocalQuotes(sorted);
-      return sorted;
+    } catch {
+      // Ignorar si quoteRequests aún no tiene reglas publicadas
+    }
+
+    try {
+      const q = query(
+        collection(db, REPORTS_FALLBACK_COLLECTION),
+        where('type', '==', 'quote_request')
+      );
+      const snap = await getDocs(q);
+      fallbackItems = snap.docs.map((d) => ({
+        ...(d.data() as Omit<QuoteRequest, 'id'>),
+        id: d.id,
+        storageCollection: REPORTS_FALLBACK_COLLECTION
+      }));
     } catch (err) {
-      console.warn('Error cargando solicitudes desde Firestore, intentando /api/admin/quotes:', err);
+      console.warn('Error leyendo solicitudes desde reports:', err);
     }
   }
 
-  try {
-    const headers = await getAdminAuthHeaders();
-    const res = await fetch('/api/admin/quotes', { headers });
-    if (res.ok) {
-      const json = (await res.json()) as { items?: QuoteRequest[] };
-      const sorted = sortByNewest(json.items || []);
-      saveLocalQuotes(sorted);
-      return sorted;
-    }
-  } catch {
-    // Usar respaldo local si no hay conexión o endpoint
-  }
-
-  return sortByNewest(readLocalQuotes());
+  const localOnly = readLocalQuotes().filter((q) => q.id.startsWith('local_'));
+  const merged = mergeQuotes(localOnly, fallbackItems, primaryItems);
+  if (merged.length > 0) saveLocalQuotes(merged);
+  return merged;
 }
 
 /**
@@ -218,36 +228,58 @@ export function subscribeQuoteRequests(
     return () => {};
   }
 
-  return onSnapshot(
+  let primaryItems: QuoteRequest[] = [];
+  let fallbackItems: QuoteRequest[] = [];
+
+  const emitMerged = () => {
+    const localOnly = readLocalQuotes().filter((q) => q.id.startsWith('local_'));
+    const merged = mergeQuotes(localOnly, fallbackItems, primaryItems);
+    if (merged.length > 0) saveLocalQuotes(merged);
+    onData(merged);
+  };
+
+  const unsubPrimary = onSnapshot(
     collection(db, COLLECTION_NAME),
     (snap) => {
-      const items: QuoteRequest[] = snap.docs.map((d) => ({
+      primaryItems = snap.docs.map((d) => ({
         ...(d.data() as Omit<QuoteRequest, 'id'>),
-        id: d.id
+        id: d.id,
+        storageCollection: COLLECTION_NAME
       }));
-      const sorted = sortByNewest(items);
-      saveLocalQuotes(sorted);
-      onData(sorted);
+      emitMerged();
     },
-    async (err) => {
-      console.warn('Error en suscripción de quoteRequests, usando respaldo API/local:', err);
-      try {
-        const headers = await getAdminAuthHeaders();
-        const res = await fetch('/api/admin/quotes', { headers });
-        if (res.ok) {
-          const json = (await res.json()) as { items?: QuoteRequest[] };
-          const sorted = sortByNewest(json.items || []);
-          saveLocalQuotes(sorted);
-          onData(sorted);
-          return;
-        }
-      } catch {
-        // Ignorar y pasar a respaldo local
-      }
-      onData(sortByNewest(readLocalQuotes()));
+    () => {
+      // Si quoteRequests aún no tiene reglas, seguir con reports sin bloquear
+      emitMerged();
+    }
+  );
+
+  const fallbackQuery = query(
+    collection(db, REPORTS_FALLBACK_COLLECTION),
+    where('type', '==', 'quote_request')
+  );
+
+  const unsubFallback = onSnapshot(
+    fallbackQuery,
+    (snap) => {
+      fallbackItems = snap.docs.map((d) => ({
+        ...(d.data() as Omit<QuoteRequest, 'id'>),
+        id: d.id,
+        storageCollection: REPORTS_FALLBACK_COLLECTION
+      }));
+      emitMerged();
+    },
+    (err) => {
+      console.warn('Error en suscripción de solicitudes:', err);
+      emitMerged();
       onError?.(err);
     }
   );
+
+  return () => {
+    unsubPrimary();
+    unsubFallback();
+  };
 }
 
 /**
@@ -255,7 +287,8 @@ export function subscribeQuoteRequests(
  */
 export async function updateQuoteRequest(
   id: string,
-  updates: { status?: QuoteRequestStatus; adminNotes?: string }
+  updates: { status?: QuoteRequestStatus; adminNotes?: string },
+  storageCollection?: 'quoteRequests' | 'reports'
 ): Promise<void> {
   const now = new Date().toISOString();
   const payload = stripUndefined({
@@ -264,15 +297,18 @@ export async function updateQuoteRequest(
   });
 
   if (isFirebaseConfigured && !id.startsWith('local_')) {
-    try {
-      await updateDoc(doc(db, COLLECTION_NAME, id), payload);
-    } catch {
-      const headers = await getAdminAuthHeaders();
-      await fetch(`/api/admin/quotes/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(payload)
-      });
+    const targetOrder: Array<'quoteRequests' | 'reports'> =
+      storageCollection === 'reports'
+        ? [REPORTS_FALLBACK_COLLECTION, COLLECTION_NAME]
+        : [COLLECTION_NAME, REPORTS_FALLBACK_COLLECTION];
+
+    for (const col of targetOrder) {
+      try {
+        await updateDoc(doc(db, col, id), payload);
+        break;
+      } catch {
+        // Intentar en la siguiente colección
+      }
     }
   }
 
@@ -283,16 +319,23 @@ export async function updateQuoteRequest(
 /**
  * Elimina permanentemente una solicitud de cotización.
  */
-export async function deleteQuoteRequest(id: string): Promise<void> {
+export async function deleteQuoteRequest(
+  id: string,
+  storageCollection?: 'quoteRequests' | 'reports'
+): Promise<void> {
   if (isFirebaseConfigured && !id.startsWith('local_')) {
-    try {
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
-    } catch {
-      const headers = await getAdminAuthHeaders();
-      await fetch(`/api/admin/quotes/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers
-      });
+    const targetOrder: Array<'quoteRequests' | 'reports'> =
+      storageCollection === 'reports'
+        ? [REPORTS_FALLBACK_COLLECTION, COLLECTION_NAME]
+        : [COLLECTION_NAME, REPORTS_FALLBACK_COLLECTION];
+
+    for (const col of targetOrder) {
+      try {
+        await deleteDoc(doc(db, col, id));
+        break;
+      } catch {
+        // Intentar en la siguiente colección
+      }
     }
   }
   saveLocalQuotes(readLocalQuotes().filter((q) => q.id !== id));

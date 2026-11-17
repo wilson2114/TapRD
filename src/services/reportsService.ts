@@ -74,7 +74,9 @@ export async function getAllReports(): Promise<ContentReport[]> {
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'reports'));
-      const remoteList = snap.docs.map(d => ({ ...(d.data() as ContentReport), id: d.id }));
+      const remoteList = snap.docs
+        .filter((d) => d.data()?.type !== 'quote_request')
+        .map((d) => ({ ...(d.data() as ContentReport), id: d.id }));
       
       const map = new Map<string, ContentReport>();
       localList.forEach(r => map.set(r.id, r));

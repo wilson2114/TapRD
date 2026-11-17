@@ -118,29 +118,39 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
     });
   }, [quotes, searchTerm, statusFilter]);
 
-  const handleStatusChange = async (id: string, status: QuoteRequestStatus) => {
+  const handleStatusChange = async (
+    id: string,
+    status: QuoteRequestStatus,
+    storageCollection?: 'quoteRequests' | 'reports'
+  ) => {
     setSavingId(id);
     try {
-      await updateQuoteRequest(id, { status });
+      await updateQuoteRequest(id, { status }, storageCollection);
     } finally {
       setSavingId(null);
     }
   };
 
-  const handleSaveNotes = async (id: string) => {
+  const handleSaveNotes = async (
+    id: string,
+    storageCollection?: 'quoteRequests' | 'reports'
+  ) => {
     setSavingId(id);
     try {
-      await updateQuoteRequest(id, { adminNotes: notesDraft });
+      await updateQuoteRequest(id, { adminNotes: notesDraft }, storageCollection);
       setEditingNotesId(null);
     } finally {
       setSavingId(null);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (
+    id: string,
+    storageCollection?: 'quoteRequests' | 'reports'
+  ) => {
     setSavingId(id);
     try {
-      await deleteQuoteRequest(id);
+      await deleteQuoteRequest(id, storageCollection);
       setConfirmDeleteId(null);
     } finally {
       setSavingId(null);
@@ -339,7 +349,11 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
                         value={item.status}
                         disabled={savingId === item.id}
                         onChange={(e) =>
-                          handleStatusChange(item.id, e.target.value as QuoteRequestStatus)
+                          handleStatusChange(
+                            item.id,
+                            e.target.value as QuoteRequestStatus,
+                            item.storageCollection
+                          )
                         }
                         className="min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer"
                       >
@@ -413,7 +427,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleSaveNotes(item.id)}
+                          onClick={() => handleSaveNotes(item.id, item.storageCollection)}
                           disabled={savingId === item.id}
                           className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                         >
@@ -486,7 +500,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleDelete(item.id)}
+                            onClick={() => handleDelete(item.id, item.storageCollection)}
                             disabled={savingId === item.id}
                             className="min-h-[36px] px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
                           >
