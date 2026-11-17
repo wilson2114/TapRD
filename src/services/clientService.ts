@@ -7,6 +7,7 @@ import {
   updateDoc,
   query,
   where,
+  limit,
   onSnapshot
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured, auth } from '../lib/firebase';
@@ -313,6 +314,8 @@ export function getCachedClientBySlug(slug: string): Client | null {
   );
 }
 
+const inFlightSlugQueries = new Map<string, Promise<Client | null>>();
+
 export async function getClientBySlug(slug: string): Promise<Client | null> {
   const cleanSlug = slug.trim().toLowerCase();
   const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -323,41 +326,54 @@ export async function getClientBySlug(slug: string): Promise<Client | null> {
     if (cachedOffline) return cachedOffline;
   }
 
-  // 2. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
-  if (isFirebaseConfigured) {
-    try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('slug', '==', cleanSlug)
-      );
-      const snap = await Promise.race([
-        getDocs(q),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('offline-timeout')), 4500)
-        )
-      ]);
-      if (!snap.empty) {
-        const first = snap.docs[0];
-        const data = { ...(first.data() as Client), id: first.id };
-        const idx = inMemoryClients.findIndex(c => c.id === data.id);
-        if (idx !== -1) inMemoryClients[idx] = data;
-        else inMemoryClients = [data, ...inMemoryClients];
-        savePublicSlugCache(cleanSlug, data);
-        return data;
+  const existingPromise = inFlightSlugQueries.get(cleanSlug);
+  if (existingPromise) return existingPromise;
+
+  const task = (async (): Promise<Client | null> => {
+    // 2. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
+    if (isFirebaseConfigured) {
+      try {
+        const q = query(
+          collection(db, COLLECTION_NAME),
+          where('slug', '==', cleanSlug),
+          limit(1)
+        );
+        const snap = await Promise.race([
+          getDocs(q),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('offline-timeout')), 4500)
+          )
+        ]);
+        if (!snap.empty) {
+          const first = snap.docs[0];
+          const data = { ...(first.data() as Client), id: first.id };
+          const idx = inMemoryClients.findIndex(c => c.id === data.id);
+          if (idx !== -1) inMemoryClients[idx] = data;
+          else inMemoryClients = [data, ...inMemoryClients];
+          savePublicSlugCache(cleanSlug, data);
+          return data;
+        }
+      } catch (err) {
+        console.warn(`Error buscando slug ${cleanSlug} en Firestore (usando respaldo offline si existe):`, err);
       }
-    } catch (err) {
-      console.warn(`Error buscando slug ${cleanSlug} en Firestore (usando respaldo offline si existe):`, err);
     }
+
+    // 3. Respaldo en caché persistente por slug o memoria local
+    const cachedSlug = readPublicSlugCache(cleanSlug);
+    if (cachedSlug) return cachedSlug;
+
+    const local = inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
+    if (local) return local;
+
+    return null;
+  })();
+
+  inFlightSlugQueries.set(cleanSlug, task);
+  try {
+    return await task;
+  } finally {
+    inFlightSlugQueries.delete(cleanSlug);
   }
-
-  // 3. Respaldo en caché persistente por slug o memoria local
-  const cachedSlug = readPublicSlugCache(cleanSlug);
-  if (cachedSlug) return cachedSlug;
-
-  const local = inMemoryClients.find(c => c.slug.toLowerCase() === cleanSlug);
-  if (local) return local;
-
-  return null;
 }
 
 export const fetchClientBySlug = getClientBySlug;

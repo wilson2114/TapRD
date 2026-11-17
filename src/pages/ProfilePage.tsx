@@ -109,16 +109,34 @@ export function ProfilePage({ slug, onNavigateHome, onSelectDemoProfile }: Profi
     );
   }
 
-  // Pantalla de carga estética mientras consulta Firestore
+  // Pantalla de carga tipo esqueleto para percepción instantánea al tocar NFC
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-600/30 animate-pulse">
-          <span>T</span>
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B1120] flex flex-col items-center pb-14">
+        <div className="w-full max-w-md px-4 py-3 border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between">
+          <div className="h-4 w-16 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="h-9 w-9 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          </div>
         </div>
-        <div className="flex items-center gap-2.5 text-xs font-bold text-slate-400">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-          <span>Cargando perfil digital NFC...</span>
+        <div className="w-full max-w-md px-4 pt-4 space-y-4">
+          <div className="rounded-3xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/80 dark:border-white/10 overflow-hidden shadow-sm">
+            <div className="h-28 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-800/70 dark:to-slate-800 animate-pulse" />
+            <div className="px-6 pb-6 -mt-14 flex flex-col items-center">
+              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-slate-200 dark:bg-slate-800 border-4 border-white dark:border-[#0B1120] animate-pulse shadow-md" />
+              <div className="mt-3.5 h-5 w-28 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              <div className="mt-2.5 h-7 w-48 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              <div className="mt-2 h-4 w-36 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              <div className="mt-5 w-full space-y-2.5">
+                <div className="h-12 w-full rounded-2xl bg-blue-600/20 dark:bg-blue-500/20 animate-pulse" />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="h-11 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                  <div className="h-11 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

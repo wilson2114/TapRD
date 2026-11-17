@@ -1,61 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { HomePage } from './pages/HomePage';
-import { ProductsPage } from './pages/ProductsPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ProfilePage } from './pages/ProfilePage';
 import { QrRedirectPage } from './pages/QrRedirectPage';
 import { GlobalMotionShell } from './components/GlobalMotionShell';
 import { getProductBySlug } from './data/products';
 
+const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(
+  loader: () => Promise<T>,
+  name: keyof T
+) => lazy(() => loader().then((m) => ({ default: m[name] })));
+
+const HomePage = lazyNamed(() => import('./pages/HomePage'), 'HomePage');
+const ProductsPage = lazyNamed(() => import('./pages/ProductsPage'), 'ProductsPage');
+const ProductDetailPage = lazyNamed(() => import('./pages/ProductDetailPage'), 'ProductDetailPage');
+
 // Auth Pages (Unified Login & Activation)
-import { LoginPage } from './pages/auth/LoginPage';
-import { ClientActivationPage } from './pages/client/ClientActivationPage';
+const LoginPage = lazyNamed(() => import('./pages/auth/LoginPage'), 'LoginPage');
+const ClientActivationPage = lazyNamed(() => import('./pages/client/ClientActivationPage'), 'ClientActivationPage');
 
 // Admin Panel Pages
-import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
-import { AdminClientsPage } from './pages/admin/AdminClientsPage';
-import { AdminClientFormPage } from './pages/admin/AdminClientFormPage';
-import { AdminProfilesPage } from './pages/admin/AdminProfilesPage';
-import { AdminProductsPage } from './pages/admin/AdminProductsPage';
-import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
-import { ProtectedRoute } from './components/admin/ProtectedRoute';
+const AdminDashboardPage = lazyNamed(() => import('./pages/admin/AdminDashboardPage'), 'AdminDashboardPage');
+const AdminClientsPage = lazyNamed(() => import('./pages/admin/AdminClientsPage'), 'AdminClientsPage');
+const AdminClientFormPage = lazyNamed(() => import('./pages/admin/AdminClientFormPage'), 'AdminClientFormPage');
+const AdminProfilesPage = lazyNamed(() => import('./pages/admin/AdminProfilesPage'), 'AdminProfilesPage');
+const AdminProductsPage = lazyNamed(() => import('./pages/admin/AdminProductsPage'), 'AdminProductsPage');
+const AdminSettingsPage = lazyNamed(() => import('./pages/admin/AdminSettingsPage'), 'AdminSettingsPage');
+const ProtectedRoute = lazyNamed(() => import('./components/admin/ProtectedRoute'), 'ProtectedRoute');
 
 // Client Portal Pages
-import { ClientDashboardPage } from './pages/client/ClientDashboardPage';
-import { ClientProfilePage } from './pages/client/ClientProfilePage';
-import { ClientServicesPage } from './pages/client/ClientServicesPage';
-import { ClientBankAccountsPage } from './pages/client/ClientBankAccountsPage';
-import { ClientHoursPage } from './pages/client/ClientHoursPage';
-import { ClientSocialsPage } from './pages/client/ClientSocialsPage';
-import { ClientQrPage } from './pages/client/ClientQrPage';
-import { ClientSupportPage } from './pages/client/ClientSupportPage';
-import { ClientSettingsPage } from './pages/client/ClientSettingsPage';
-import { ClientAnalyticsPage } from './pages/client/ClientAnalyticsPage';
-import { ClientRoute } from './components/client/ClientRoute';
+const ClientDashboardPage = lazyNamed(() => import('./pages/client/ClientDashboardPage'), 'ClientDashboardPage');
+const ClientProfilePage = lazyNamed(() => import('./pages/client/ClientProfilePage'), 'ClientProfilePage');
+const ClientServicesPage = lazyNamed(() => import('./pages/client/ClientServicesPage'), 'ClientServicesPage');
+const ClientBankAccountsPage = lazyNamed(() => import('./pages/client/ClientBankAccountsPage'), 'ClientBankAccountsPage');
+const ClientHoursPage = lazyNamed(() => import('./pages/client/ClientHoursPage'), 'ClientHoursPage');
+const ClientSocialsPage = lazyNamed(() => import('./pages/client/ClientSocialsPage'), 'ClientSocialsPage');
+const ClientQrPage = lazyNamed(() => import('./pages/client/ClientQrPage'), 'ClientQrPage');
+const ClientSupportPage = lazyNamed(() => import('./pages/client/ClientSupportPage'), 'ClientSupportPage');
+const ClientSettingsPage = lazyNamed(() => import('./pages/client/ClientSettingsPage'), 'ClientSettingsPage');
+const ClientAnalyticsPage = lazyNamed(() => import('./pages/client/ClientAnalyticsPage'), 'ClientAnalyticsPage');
+const ClientRoute = lazyNamed(() => import('./components/client/ClientRoute'), 'ClientRoute');
 
 // Plans & Pricing Pages (Parte 9)
-import { PlansPage } from './pages/PlansPage';
-import { ComparePlansPage } from './pages/ComparePlansPage';
-import { AdminPlansPage } from './pages/admin/AdminPlansPage';
-import { AdminPlanFormPage } from './pages/admin/AdminPlanFormPage';
+const PlansPage = lazyNamed(() => import('./pages/PlansPage'), 'PlansPage');
+const ComparePlansPage = lazyNamed(() => import('./pages/ComparePlansPage'), 'ComparePlansPage');
+const AdminPlansPage = lazyNamed(() => import('./pages/admin/AdminPlansPage'), 'AdminPlansPage');
+const AdminPlanFormPage = lazyNamed(() => import('./pages/admin/AdminPlanFormPage'), 'AdminPlanFormPage');
 
 // Legal & Compliance Pages (Parte 10)
-import { TermsPage } from './pages/legal/TermsPage';
-import { PrivacyPage } from './pages/legal/PrivacyPage';
-import { CookiesPage } from './pages/legal/CookiesPage';
-import { CancellationPolicyPage } from './pages/legal/CancellationPolicyPage';
-import { RefundPolicyPage } from './pages/legal/RefundPolicyPage';
-import { LegalNoticePage } from './pages/legal/LegalNoticePage';
-import { AcceptableUsePage } from './pages/legal/AcceptableUsePage';
-import { ContactPage } from './pages/legal/ContactPage';
+const TermsPage = lazyNamed(() => import('./pages/legal/TermsPage'), 'TermsPage');
+const PrivacyPage = lazyNamed(() => import('./pages/legal/PrivacyPage'), 'PrivacyPage');
+const CookiesPage = lazyNamed(() => import('./pages/legal/CookiesPage'), 'CookiesPage');
+const CancellationPolicyPage = lazyNamed(() => import('./pages/legal/CancellationPolicyPage'), 'CancellationPolicyPage');
+const RefundPolicyPage = lazyNamed(() => import('./pages/legal/RefundPolicyPage'), 'RefundPolicyPage');
+const LegalNoticePage = lazyNamed(() => import('./pages/legal/LegalNoticePage'), 'LegalNoticePage');
+const AcceptableUsePage = lazyNamed(() => import('./pages/legal/AcceptableUsePage'), 'AcceptableUsePage');
+const ContactPage = lazyNamed(() => import('./pages/legal/ContactPage'), 'ContactPage');
 
 // Client Legal & Contract Pages (Parte 10)
-import { ClientPrivacyPage } from './pages/client/ClientPrivacyPage';
-import { ClientContractPage } from './pages/client/ClientContractPage';
+const ClientPrivacyPage = lazyNamed(() => import('./pages/client/ClientPrivacyPage'), 'ClientPrivacyPage');
+const ClientContractPage = lazyNamed(() => import('./pages/client/ClientContractPage'), 'ClientContractPage');
 
 // Admin Moderation & Privacy Pages (Parte 10)
-import { AdminReportsPage } from './pages/admin/AdminReportsPage';
-import { AdminPrivacyPage } from './pages/admin/AdminPrivacyPage';
+const AdminReportsPage = lazyNamed(() => import('./pages/admin/AdminReportsPage'), 'AdminReportsPage');
+const AdminPrivacyPage = lazyNamed(() => import('./pages/admin/AdminPrivacyPage'), 'AdminPrivacyPage');
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -348,7 +354,15 @@ export default function App() {
 
   return (
     <GlobalMotionShell routeKey={currentPath}>
-      {renderPage()}
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] dark:bg-[#0B1120]">
+            <div className="w-8 h-8 rounded-full border-2 border-blue-600/30 border-t-blue-600 animate-spin" />
+          </div>
+        }
+      >
+        {renderPage()}
+      </Suspense>
     </GlobalMotionShell>
   );
 }
