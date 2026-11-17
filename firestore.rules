@@ -276,5 +276,20 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // =========================================================================
+    // COLECCIÓN: quoteRequests/{requestId} (Solicitudes de Cotización / Leads)
+    // =========================================================================
+    match /quoteRequests/{requestId} {
+      // Cualquier visitante puede enviar una solicitud de cotización
+      allow create: if request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 150 &&
+        request.resource.data.status == 'new' &&
+        request.resource.data.createdAt is string;
+
+      // Solo ADMIN puede consultar, actualizar estado/notas o eliminar leads
+      allow read, update, delete: if isAdmin();
+    }
   }
 }

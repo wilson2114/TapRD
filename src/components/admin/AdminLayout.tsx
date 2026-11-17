@@ -16,7 +16,8 @@ import {
   Sparkles,
   CreditCard,
   Flag,
-  ShieldCheck
+  ShieldCheck,
+  Inbox
 } from 'lucide-react';
 import { logoutAdmin, getCurrentAdminUser } from '../../services/adminAuthService';
 
@@ -97,6 +98,12 @@ export function AdminLayout({
       badge: undefined
     },
     {
+      label: 'Solicitudes',
+      path: '/admin/solicitudes',
+      icon: Inbox,
+      badge: 'Leads'
+    },
+    {
       label: 'Clientes',
       path: '/admin/clientes',
       icon: Users,
@@ -155,6 +162,9 @@ export function AdminLayout({
     const norm = currentPath.replace(/\/+$/, '') || '/';
     if (norm === '/admin') {
       return [{ label: 'Dashboard', path: '/admin' }];
+    }
+    if (norm === '/admin/solicitudes') {
+      return [{ label: 'Solicitudes', path: '/admin/solicitudes' }];
     }
     if (norm === '/admin/clientes/nuevo') {
       return [

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, CheckCircle2, MessageCircle, Send, Sparkles, Building, User, Phone, Mail, Layers, HelpCircle } from 'lucide-react';
 import { PRODUCTS } from '../data/products';
 import { createProductWhatsAppUrl } from '../config/constants';
+import { createQuoteRequest } from '../services/quoteService';
 import { CitySelector } from './CitySelector';
 
 interface ProductRequestModalProps {
@@ -44,38 +45,35 @@ export function ProductRequestModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Simulate submission saving
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await createQuoteRequest({
+        source: 'product_modal',
+        name,
+        businessName,
+        phone: whatsapp,
+        email,
+        city,
+        businessType,
+        productInterest: selectedProduct,
+        quantity: Number(quantity) || 1,
+        needOption,
+        message
+      });
       setIsSubmitted(true);
-
-      // Save inquiry to local lead registry for SaaS demonstration
-      try {
-        const stored = localStorage.getItem('taprd_product_inquiries');
-        const list = stored ? JSON.parse(stored) : [];
-        list.push({
-          name,
-          businessName,
-          whatsapp,
-          email,
-          city,
-          businessType,
-          selectedProduct,
-          quantity,
-          needOption,
-          message,
-          submittedAt: new Date().toISOString()
-        });
-        localStorage.setItem('taprd_product_inquiries', JSON.stringify(list));
-      } catch {}
-    }, 600);
+    } catch {
+      setSubmitError('No se pudo enviar tu solicitud. Inténtalo de nuevo o contáctanos por WhatsApp.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleWhatsAppDirect = () => {
@@ -395,6 +393,12 @@ export function ProductRequestModal({
                   className="w-full p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white dark:focus:bg-slate-800 transition-all"
                 />
               </div>
+
+              {submitError && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                  {submitError}
+                </div>
+              )}
 
               {/* Action Buttons: Solicitar cotización + Solicitar por WhatsApp */}
               <div className="pt-2 flex flex-col sm:flex-row gap-2.5">

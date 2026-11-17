@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ContactInquiry } from '../types';
+import { createQuoteRequest } from '../services/quoteService';
 import { Send, CheckCircle2, X, Sparkles, MessageSquare, Phone, Building, User, Mail, Tag } from 'lucide-react';
 
 interface ContactFormProps {
@@ -48,22 +49,30 @@ export function ContactForm({
     'Tap Card (Desde RD$1,800)'
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Visual simulation delay
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await createQuoteRequest({
+        source: 'contact_form',
+        name: formData.name,
+        businessName: formData.businessName,
+        phone: formData.phone,
+        email: formData.email,
+        businessType: formData.businessType,
+        productInterest: formData.productInterest,
+        message: formData.message
+      });
       setIsSuccess(true);
-      // Save to demo leads in local storage for SaaS preview
-      try {
-        const stored = localStorage.getItem('taprd_demo_leads');
-        const leads = stored ? JSON.parse(stored) : [];
-        leads.push({ ...formData, submittedAt: new Date().toISOString() });
-        localStorage.setItem('taprd_demo_leads', JSON.stringify(leads));
-      } catch {}
-    }, 650);
+    } catch {
+      setSubmitError('No se pudo enviar la solicitud en este momento. Intenta nuevamente o escríbenos por WhatsApp.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -292,6 +301,12 @@ export function ContactForm({
           <p className="text-[11px] text-slate-400 dark:text-slate-500">
             Tus datos están protegidos. No compartimos tu información con terceros ni enviamos spam.
           </p>
+
+          {submitError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-700 dark:text-rose-300">
+              {submitError}
+            </div>
+          )}
 
           {/* Submit Button */}
           <button

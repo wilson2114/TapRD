@@ -3,6 +3,7 @@ import { LegalLayout } from '../../components/legal/LegalLayout';
 import { COMPANY_CONFIG } from '../../config/company';
 import { Mail, Phone, MapPin, Send, CheckCircle2, ShieldCheck, MessageCircle, Clock } from 'lucide-react';
 import { getWhatsAppUrl } from '../../config/constants';
+import { createQuoteRequest } from '../../services/quoteService';
 
 interface ContactPageProps {
   onNavigate: (path: string) => void;
@@ -15,9 +16,21 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !message.trim()) return;
+
+    try {
+      await createQuoteRequest({
+        source: 'contact_page',
+        name,
+        email,
+        businessType: subject,
+        message
+      });
+    } catch {
+      // Continuar con mailto si falla la escritura en Firestore
+    }
 
     // Abrir enlace directo a correo o WhatsApp
     const body = `Nombre: ${name}\nCorreo: ${email}\nMotivo: ${subject}\n\nMensaje:\n${message}`;

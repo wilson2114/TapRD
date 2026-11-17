@@ -24,6 +24,7 @@ const AdminClientFormPage = lazyNamed(() => import('./pages/admin/AdminClientFor
 const AdminProfilesPage = lazyNamed(() => import('./pages/admin/AdminProfilesPage'), 'AdminProfilesPage');
 const AdminProductsPage = lazyNamed(() => import('./pages/admin/AdminProductsPage'), 'AdminProductsPage');
 const AdminSettingsPage = lazyNamed(() => import('./pages/admin/AdminSettingsPage'), 'AdminSettingsPage');
+const AdminQuotesPage = lazyNamed(() => import('./pages/admin/AdminQuotesPage'), 'AdminQuotesPage');
 const ProtectedRoute = lazyNamed(() => import('./components/admin/ProtectedRoute'), 'ProtectedRoute');
 
 // Client Portal Pages
@@ -226,6 +227,8 @@ export default function App() {
         adminContent = <AdminReportsPage onNavigate={navigate} />;
       } else if (currentPath === '/admin/privacidad' || currentPath === '/admin/privacidad/') {
         adminContent = <AdminPrivacyPage onNavigate={navigate} />;
+      } else if (currentPath === '/admin/solicitudes' || currentPath === '/admin/solicitudes/') {
+        adminContent = <AdminQuotesPage onNavigate={navigate} />;
       } else if (currentPath === '/admin/configuracion' || currentPath === '/admin/configuracion/') {
         adminContent = <AdminSettingsPage onNavigate={navigate} />;
       } else {
