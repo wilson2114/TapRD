@@ -1,5 +1,6 @@
 import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage, isFirebaseConfigured } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   validateServiceImageFile, 
   reprocessAndSanitizeImage, 
@@ -76,7 +77,30 @@ export async function uploadClientLogo(
     throw new Error(validation.error || 'Archivo de imagen no válido');
   }
 
-  // 2. Si Firebase no está completamente configurado en el entorno, usar fallback DataURL
+  // 2. Intentar subir a Supabase Storage (bucket taprd-media)
+  if (isSupabaseConfigured) {
+    try {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const timestamp = Date.now();
+      const cleanClientId = clientId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const supaPath = `clients/${cleanClientId}/logo_${timestamp}.${fileExtension}`;
+      if (onProgress) onProgress(30);
+      const { error: uploadErr } = await supabase.storage
+        .from('taprd-media')
+        .upload(supaPath, file, { contentType: file.type, upsert: true });
+      if (!uploadErr) {
+        const { data: pub } = supabase.storage.from('taprd-media').getPublicUrl(supaPath);
+        if (pub?.publicUrl) {
+          if (onProgress) onProgress(100);
+          return pub.publicUrl;
+        }
+      }
+    } catch (supaErr) {
+      console.warn('Supabase Storage upload falló, intentando Firebase Storage:', supaErr);
+    }
+  }
+
+  // 3. Si Firebase no está completamente configurado en el entorno, usar fallback DataURL
   if (!isFirebaseConfigured) {
     if (onProgress) onProgress(100);
     return fileToDataUrl(file);

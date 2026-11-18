@@ -1,5 +1,6 @@
 import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
 import { recordInteraction, InteractionType } from '../utils/analytics';
@@ -138,6 +139,18 @@ export function trackAnalyticsEvent(
 
   if (slug) {
     recordInteraction(slug, mapToLocalInteraction(validated.data.type));
+  }
+
+  if (isSupabaseConfigured) {
+    supabase
+      .from('analytics_events')
+      .insert({
+        client_id: validated.data.clientId,
+        type: validated.data.type,
+        device: validated.data.device,
+        created_at: new Date().toISOString()
+      })
+      .then(() => undefined, () => undefined);
   }
 
   const writeFirestoreFallback = () => {

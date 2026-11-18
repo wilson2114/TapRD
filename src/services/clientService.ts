@@ -413,6 +413,12 @@ export async function incrementClientViews(clientId: string): Promise<void> {
     saveLocalCache(inMemoryClients);
   }
 
+  if (isSupabaseConfigured) {
+    supabase
+      .rpc('increment_client_views', { target_client_id: clientId })
+      .then(() => undefined, () => undefined);
+  }
+
   // En Firestore
   if (isFirebaseConfigured) {
     try {
@@ -583,6 +589,13 @@ export async function updateClient(
     inMemoryClients = [updatedClient, ...inMemoryClients];
   }
   saveLocalCache([...inMemoryClients]);
+
+  if (isSupabaseConfigured) {
+    supabase
+      .from('clients')
+      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' })
+      .then(() => undefined, () => undefined);
+  }
   if (updatedClient.slug) {
     savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
   }
