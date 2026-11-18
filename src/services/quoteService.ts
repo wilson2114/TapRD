@@ -11,6 +11,7 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type QuoteRequestSource = 'contact_form' | 'product_modal' | 'contact_page';
 export type QuoteRequestStatus = 'new' | 'contacted' | 'quoted' | 'closed' | 'discarded';
@@ -32,7 +33,7 @@ export interface QuoteRequest {
   adminNotes?: string;
   createdAt: string;
   updatedAt?: string;
-  storageCollection?: 'quoteRequests' | 'reports';
+  storageCollection?: 'supabase' | 'quoteRequests' | 'reports';
 }
 
 export interface CreateQuoteRequestInput {
@@ -51,7 +52,30 @@ export interface CreateQuoteRequestInput {
 
 const COLLECTION_NAME = 'quoteRequests';
 const REPORTS_FALLBACK_COLLECTION = 'reports';
+const SUPABASE_TABLE = 'quote_requests';
 const LOCAL_STORAGE_KEY = 'taprd_quote_requests_v1';
+
+function mapSupabaseRow(row: any): QuoteRequest {
+  return {
+    id: row.id,
+    source: row.source || 'contact_form',
+    name: row.name || '',
+    businessName: row.business_name || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    businessType: row.business_type || '',
+    productInterest: row.product_interest || 'Tap Card',
+    quantity: Number(row.quantity) || 1,
+    city: row.city || '',
+    needOption: row.need_option || '',
+    message: row.message || '',
+    status: row.status || 'new',
+    adminNotes: row.admin_notes || '',
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || row.created_at,
+    storageCollection: 'supabase'
+  };
+}
 
 function readLocalQuotes(): QuoteRequest[] {
   if (typeof window === 'undefined') return [];
@@ -101,7 +125,7 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 }
 
 /**
- * Guarda una nueva solicitud de cotización en Firestore (quoteRequests o respaldo en reports) + local.
+ * Guarda una nueva solicitud de cotización en Supabase (primario) o Firestore (respaldo) + local.
  */
 export async function createQuoteRequest(input: CreateQuoteRequestInput): Promise<QuoteRequest> {
   const now = new Date().toISOString();
@@ -123,8 +147,43 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
     updatedAt: now
   });
 
+  // 1. Intentar Supabase PostgreSQL primero
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .insert({
+          source: payload.source,
+          name: payload.name,
+          business_name: payload.businessName,
+          phone: payload.phone,
+          email: payload.email,
+          business_type: payload.businessType,
+          product_interest: payload.productInterest,
+          quantity: payload.quantity,
+          city: payload.city,
+          need_option: payload.needOption,
+          message: payload.message,
+          status: 'new',
+          admin_notes: '',
+          created_at: now,
+          updated_at: now
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        const created = mapSupabaseRow(data);
+        saveLocalQuotes(mergeQuotes([created], readLocalQuotes()));
+        return created;
+      }
+    } catch (supaErr) {
+      console.warn('Supabase quote_requests aún no disponible, usando respaldo Firestore:', supaErr);
+    }
+  }
+
+  // 2. Respaldo Firestore (quoteRequests -> reports)
   if (isFirebaseConfigured) {
-    // 1. Intentar colección principal quoteRequests
     try {
       const ref = await Promise.race([
         addDoc(collection(db, COLLECTION_NAME), payload),
@@ -139,11 +198,10 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
       };
       saveLocalQuotes(mergeQuotes([created], readLocalQuotes()));
       return created;
-    } catch (err) {
-      console.warn('quoteRequests rechazado/no disponible, usando colección reports en Firestore:', err);
+    } catch {
+      // Fallback a reports
     }
 
-    // 2. Respaldo en Firestore sobre reports (regla pública ya activa en producción)
     try {
       const ref = await Promise.race([
         addDoc(collection(db, REPORTS_FALLBACK_COLLECTION), {
@@ -161,12 +219,11 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
       };
       saveLocalQuotes(mergeQuotes([created], readLocalQuotes()));
       return created;
-    } catch (fallbackErr) {
-      console.warn('Fallback en Firestore reports falló, guardando en localStorage:', fallbackErr);
+    } catch {
+      // Fallback a localStorage
     }
   }
 
-  // 3. Respaldo local garantizado
   const localItem: QuoteRequest = {
     ...(payload as Omit<QuoteRequest, 'id'>),
     id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -176,11 +233,26 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
 }
 
 /**
- * Obtiene todas las solicitudes de cotización desde Firestore (quoteRequests + reports) y respaldo local.
+ * Obtiene todas las solicitudes de cotización desde Supabase + Firestore + local.
  */
 export async function getQuoteRequests(): Promise<QuoteRequest[]> {
+  let supaItems: QuoteRequest[] = [];
   let primaryItems: QuoteRequest[] = [];
   let fallbackItems: QuoteRequest[] = [];
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        supaItems = data.map(mapSupabaseRow);
+      }
+    } catch {
+      // Ignorar si la tabla aún no existe
+    }
+  }
 
   if (isFirebaseConfigured) {
     try {
@@ -191,7 +263,7 @@ export async function getQuoteRequests(): Promise<QuoteRequest[]> {
         storageCollection: COLLECTION_NAME
       }));
     } catch {
-      // Ignorar si quoteRequests aún no tiene reglas publicadas
+      // Ignorar
     }
 
     try {
@@ -205,80 +277,121 @@ export async function getQuoteRequests(): Promise<QuoteRequest[]> {
         id: d.id,
         storageCollection: REPORTS_FALLBACK_COLLECTION
       }));
-    } catch (err) {
-      console.warn('Error leyendo solicitudes desde reports:', err);
+    } catch {
+      // Ignorar
     }
   }
 
   const localOnly = readLocalQuotes().filter((q) => q.id.startsWith('local_'));
-  const merged = mergeQuotes(localOnly, fallbackItems, primaryItems);
+  const merged = mergeQuotes(localOnly, fallbackItems, primaryItems, supaItems);
   if (merged.length > 0) saveLocalQuotes(merged);
   return merged;
 }
 
 /**
- * Suscripción en tiempo real a las solicitudes de cotización para la bandeja del Admin.
+ * Suscripción en tiempo real (Supabase + Firestore) a las solicitudes de cotización.
  */
 export function subscribeQuoteRequests(
   onData: (items: QuoteRequest[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  if (!isFirebaseConfigured) {
-    onData(sortByNewest(readLocalQuotes()));
-    return () => {};
-  }
-
+  let supaItems: QuoteRequest[] = [];
   let primaryItems: QuoteRequest[] = [];
   let fallbackItems: QuoteRequest[] = [];
+  let disposed = false;
 
   const emitMerged = () => {
+    if (disposed) return;
     const localOnly = readLocalQuotes().filter((q) => q.id.startsWith('local_'));
-    const merged = mergeQuotes(localOnly, fallbackItems, primaryItems);
+    const merged = mergeQuotes(localOnly, fallbackItems, primaryItems, supaItems);
     if (merged.length > 0) saveLocalQuotes(merged);
     onData(merged);
   };
 
-  const unsubPrimary = onSnapshot(
-    collection(db, COLLECTION_NAME),
-    (snap) => {
-      primaryItems = snap.docs.map((d) => ({
-        ...(d.data() as Omit<QuoteRequest, 'id'>),
-        id: d.id,
-        storageCollection: COLLECTION_NAME
-      }));
-      emitMerged();
-    },
-    () => {
-      // Si quoteRequests aún no tiene reglas, seguir con reports sin bloquear
-      emitMerged();
+  const loadSupabase = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        supaItems = data.map(mapSupabaseRow);
+        emitMerged();
+      }
+    } catch {
+      // Tabla aún no creada
     }
-  );
+  };
 
-  const fallbackQuery = query(
-    collection(db, REPORTS_FALLBACK_COLLECTION),
-    where('type', '==', 'quote_request')
-  );
+  loadSupabase();
 
-  const unsubFallback = onSnapshot(
-    fallbackQuery,
-    (snap) => {
-      fallbackItems = snap.docs.map((d) => ({
-        ...(d.data() as Omit<QuoteRequest, 'id'>),
-        id: d.id,
-        storageCollection: REPORTS_FALLBACK_COLLECTION
-      }));
-      emitMerged();
-    },
-    (err) => {
-      console.warn('Error en suscripción de solicitudes:', err);
-      emitMerged();
-      onError?.(err);
+  let supaChannel: ReturnType<typeof supabase.channel> | null = null;
+  if (isSupabaseConfigured) {
+    try {
+      supaChannel = supabase
+        .channel('taprd-quote-requests')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: SUPABASE_TABLE },
+          () => {
+            loadSupabase();
+          }
+        )
+        .subscribe();
+    } catch {
+      // Ignorar si Realtime no está habilitado
     }
-  );
+  }
+
+  let unsubPrimary: Unsubscribe = () => {};
+  let unsubFallback: Unsubscribe = () => {};
+
+  if (isFirebaseConfigured) {
+    unsubPrimary = onSnapshot(
+      collection(db, COLLECTION_NAME),
+      (snap) => {
+        primaryItems = snap.docs.map((d) => ({
+          ...(d.data() as Omit<QuoteRequest, 'id'>),
+          id: d.id,
+          storageCollection: COLLECTION_NAME
+        }));
+        emitMerged();
+      },
+      () => emitMerged()
+    );
+
+    const fallbackQuery = query(
+      collection(db, REPORTS_FALLBACK_COLLECTION),
+      where('type', '==', 'quote_request')
+    );
+
+    unsubFallback = onSnapshot(
+      fallbackQuery,
+      (snap) => {
+        fallbackItems = snap.docs.map((d) => ({
+          ...(d.data() as Omit<QuoteRequest, 'id'>),
+          id: d.id,
+          storageCollection: REPORTS_FALLBACK_COLLECTION
+        }));
+        emitMerged();
+      },
+      (err) => {
+        emitMerged();
+        onError?.(err);
+      }
+    );
+  } else if (!isSupabaseConfigured) {
+    onData(sortByNewest(readLocalQuotes()));
+  }
 
   return () => {
+    disposed = true;
     unsubPrimary();
     unsubFallback();
+    if (supaChannel) {
+      supabase.removeChannel(supaChannel);
+    }
   };
 }
 
@@ -288,13 +401,29 @@ export function subscribeQuoteRequests(
 export async function updateQuoteRequest(
   id: string,
   updates: { status?: QuoteRequestStatus; adminNotes?: string },
-  storageCollection?: 'quoteRequests' | 'reports'
+  storageCollection?: 'supabase' | 'quoteRequests' | 'reports'
 ): Promise<void> {
   const now = new Date().toISOString();
   const payload = stripUndefined({
     ...updates,
     updatedAt: now
   });
+
+  if (isSupabaseConfigured && (storageCollection === 'supabase' || !storageCollection)) {
+    try {
+      const supaUpdates: Record<string, unknown> = { updated_at: now };
+      if (updates.status !== undefined) supaUpdates.status = updates.status;
+      if (updates.adminNotes !== undefined) supaUpdates.admin_notes = updates.adminNotes;
+      const { error } = await supabase.from(SUPABASE_TABLE).update(supaUpdates).eq('id', id);
+      if (!error && storageCollection === 'supabase') {
+        const local = readLocalQuotes().map((q) => (q.id === id ? { ...q, ...payload } : q));
+        saveLocalQuotes(local);
+        return;
+      }
+    } catch {
+      // Continuar con Firestore si aplica
+    }
+  }
 
   if (isFirebaseConfigured && !id.startsWith('local_')) {
     const targetOrder: Array<'quoteRequests' | 'reports'> =
@@ -321,8 +450,20 @@ export async function updateQuoteRequest(
  */
 export async function deleteQuoteRequest(
   id: string,
-  storageCollection?: 'quoteRequests' | 'reports'
+  storageCollection?: 'supabase' | 'quoteRequests' | 'reports'
 ): Promise<void> {
+  if (isSupabaseConfigured && (storageCollection === 'supabase' || !storageCollection)) {
+    try {
+      const { error } = await supabase.from(SUPABASE_TABLE).delete().eq('id', id);
+      if (!error && storageCollection === 'supabase') {
+        saveLocalQuotes(readLocalQuotes().filter((q) => q.id !== id));
+        return;
+      }
+    } catch {
+      // Continuar con Firestore si aplica
+    }
+  }
+
   if (isFirebaseConfigured && !id.startsWith('local_')) {
     const targetOrder: Array<'quoteRequests' | 'reports'> =
       storageCollection === 'reports'

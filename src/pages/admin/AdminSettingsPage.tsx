@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { PUBLIC_BASE_URL, WHATSAPP_NUMBER } from '../../config/constants';
 import { getRegisteredAdmins, createAdminUser } from '../../services/adminAuthService';
-import { Settings, Save, Check, Database, Key, Globe, Shield, Radio, Server, Code, UserPlus, Users, ShieldCheck } from 'lucide-react';
+import {
+  getSupabaseStatusReport,
+  migrateFirestoreToSupabase,
+  SupabaseStatusReport,
+  MigrationResult
+} from '../../services/supabaseMigrationService';
+import { Settings, Save, Check, Database, Key, Globe, Shield, Radio, Server, Code, UserPlus, Users, ShieldCheck, RefreshCw, UploadCloud } from 'lucide-react';
 
 interface AdminSettingsPageProps {
   onNavigate: (path: string) => void;
@@ -22,6 +28,36 @@ export function AdminSettingsPage({ onNavigate }: AdminSettingsPageProps) {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminRole, setNewAdminRole] = useState<'admin' | 'superadmin'>('admin');
   const [adminMsg, setAdminMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [supaStatus, setSupaStatus] = useState<SupabaseStatusReport | null>(null);
+  const [isCheckingSupa, setIsCheckingSupa] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
+
+  const refreshSupabaseStatus = async () => {
+    setIsCheckingSupa(true);
+    try {
+      const report = await getSupabaseStatusReport();
+      setSupaStatus(report);
+    } finally {
+      setIsCheckingSupa(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshSupabaseStatus();
+  }, []);
+
+  const handleMigrateToSupabase = async () => {
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      const res = await migrateFirestoreToSupabase();
+      setMigrationResult(res);
+      await refreshSupabaseStatus();
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,6 +298,84 @@ export function AdminSettingsPage({ onNavigate }: AdminSettingsPageProps) {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* 2.5. Conexión & Migración a Supabase */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200/70 dark:border-emerald-800/50">
+                <Database className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900 dark:text-white">
+                  Supabase PostgreSQL (Conectado)
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Sincroniza clientes, planes, solicitudes y reportes desde Firebase hacia Supabase en un clic.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={refreshSupabaseStatus}
+              disabled={isCheckingSupa}
+              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isCheckingSupa ? 'animate-spin' : ''}`} />
+              <span>Verificar tablas</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            {[
+              { label: 'Tabla clients', ok: supaStatus?.clientsReady },
+              { label: 'Tabla quote_requests', ok: supaStatus?.quotesReady },
+              { label: 'Tabla plans', ok: supaStatus?.plansReady },
+              { label: 'Tabla reports', ok: supaStatus?.reportsReady }
+            ].map((t) => (
+              <div
+                key={t.label}
+                className={`p-3 rounded-xl border font-bold flex items-center justify-between gap-2 ${
+                  t.ok
+                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300'
+                }`}
+              >
+                <span className="truncate">{t.label}</span>
+                <span>{t.ok ? 'Lista' : 'Pendiente'}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Si alguna tabla aparece <strong>Pendiente</strong>, ejecuta primero <code className="text-blue-600 dark:text-blue-400">supabase/schema.sql</code> en el SQL Editor de Supabase.
+            </p>
+            <button
+              type="button"
+              onClick={handleMigrateToSupabase}
+              disabled={isMigrating}
+              className="min-h-[42px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 shadow-sm cursor-pointer shrink-0"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>{isMigrating ? 'Migrando datos...' : 'Migrar Firebase → Supabase'}</span>
+            </button>
+          </div>
+
+          {migrationResult && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+              <p className="font-bold text-slate-900 dark:text-white">
+                Resultado de migración: {migrationResult.clientsMigrated} clientes, {migrationResult.plansMigrated} planes, {migrationResult.quotesMigrated} solicitudes, {migrationResult.reportsMigrated} reportes.
+              </p>
+              {migrationResult.errors.length > 0 && (
+                <p className="text-rose-600 dark:text-rose-400 font-semibold">
+                  Avisos: {migrationResult.errors.join(' | ')}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 3. Preparación de Infraestructura Cloud & Backend (TODOs de Fase SaaS) */}

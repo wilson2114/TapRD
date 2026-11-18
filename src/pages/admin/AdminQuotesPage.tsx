@@ -121,7 +121,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
   const handleStatusChange = async (
     id: string,
     status: QuoteRequestStatus,
-    storageCollection?: 'quoteRequests' | 'reports'
+    storageCollection?: QuoteRequest['storageCollection']
   ) => {
     setSavingId(id);
     try {
@@ -133,7 +133,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
 
   const handleSaveNotes = async (
     id: string,
-    storageCollection?: 'quoteRequests' | 'reports'
+    storageCollection?: QuoteRequest['storageCollection']
   ) => {
     setSavingId(id);
     try {
@@ -146,7 +146,7 @@ export function AdminQuotesPage({ onNavigate }: AdminQuotesPageProps) {
 
   const handleDelete = async (
     id: string,
-    storageCollection?: 'quoteRequests' | 'reports'
+    storageCollection?: QuoteRequest['storageCollection']
   ) => {
     setSavingId(id);
     try {

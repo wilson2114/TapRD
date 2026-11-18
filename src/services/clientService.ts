@@ -11,6 +11,8 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured, auth } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clientToSupabaseRow } from './supabaseMigrationService';
 import { Client, ClientStatus, ClientService } from '../types/client';
 import { INITIAL_CLIENTS } from '../data/initialClients';
 import { COMPANY_CONFIG } from '../config/company';
@@ -358,7 +360,29 @@ export async function getClientBySlug(slug: string): Promise<Client | null> {
       }
     }
 
-    // 3. Respaldo en caché persistente por slug o memoria local
+    // 3. Consultar en Supabase PostgreSQL si Firestore no devolvió resultado
+    if (isSupabaseConfigured) {
+      try {
+        const { data: row, error } = await supabase
+          .from('clients')
+          .select('data')
+          .eq('slug', cleanSlug)
+          .limit(1)
+          .maybeSingle();
+        if (!error && row?.data) {
+          const clientData = row.data as Client;
+          const idx = inMemoryClients.findIndex(c => c.id === clientData.id);
+          if (idx !== -1) inMemoryClients[idx] = clientData;
+          else inMemoryClients = [clientData, ...inMemoryClients];
+          savePublicSlugCache(cleanSlug, clientData);
+          return clientData;
+        }
+      } catch {
+        // Ignorar si la tabla clients aún no existe en Supabase
+      }
+    }
+
+    // 4. Respaldo en caché persistente por slug o memoria local
     const cachedSlug = readPublicSlugCache(cleanSlug);
     if (cachedSlug) return cachedSlug;
 
@@ -493,6 +517,13 @@ export async function createClient(
         throw new Error(err.message || 'No se pudo guardar el cliente en Firestore.');
       }
     }
+  }
+
+  if (isSupabaseConfigured) {
+    supabase
+      .from('clients')
+      .upsert(clientToSupabaseRow(newClient), { onConflict: 'id' })
+      .then(() => undefined, () => undefined);
   }
 
   return newClient;
@@ -644,6 +675,10 @@ export async function deleteClient(id: string, hardDelete: boolean = false): Pro
     } catch (err) {
       console.error('Error al eliminar físicamente de Firestore:', err);
     }
+  }
+
+  if (isSupabaseConfigured) {
+    supabase.from('clients').delete().eq('id', id).then(() => undefined, () => undefined);
   }
 
   return true;
