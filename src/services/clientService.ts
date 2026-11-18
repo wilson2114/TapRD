@@ -257,6 +257,26 @@ export async function fetchClients(): Promise<Client[]> {
     console.warn('Error consultando clientes de Firestore:', err);
   }
 
+  if (isSupabaseConfigured) {
+    try {
+      const { data: rows, error } = await supabase
+        .from('clients')
+        .select('data')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(rows) && rows.length > 0) {
+        const list = rows
+          .map((r: any) => r.data as Client)
+          .filter((c) => c && (c.businessName || c.slug));
+        if (list.length > 0) {
+          saveLocalCache(list);
+          return list;
+        }
+      }
+    } catch (supaErr) {
+      console.warn('Error consultando clientes en Supabase:', supaErr);
+    }
+  }
+
   return inMemoryClients;
 }
 
@@ -277,6 +297,22 @@ export async function getClientById(id: string): Promise<Client | null> {
       }
     } catch (err) {
       console.warn(`Error buscando cliente ${id} en Firestore:`, err);
+    }
+  }
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data: row, error } = await supabase
+        .from('clients')
+        .select('data')
+        .eq('id', id)
+        .limit(1)
+        .maybeSingle();
+      if (!error && row?.data) {
+        return row.data as Client;
+      }
+    } catch {
+      // Ignorar si falla Supabase
     }
   }
 
@@ -886,6 +922,13 @@ export async function updateClientByOwner(
   saveLocalCache([...inMemoryClients]);
   if (updatedClient.slug) {
     savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
+  }
+
+  if (isSupabaseConfigured) {
+    supabase
+      .from('clients')
+      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' })
+      .then(() => undefined, () => undefined);
   }
 
   // Sincronizar con la sesión local del cliente si existe

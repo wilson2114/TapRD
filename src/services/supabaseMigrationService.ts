@@ -104,9 +104,10 @@ export async function migrateFirestoreToSupabase(): Promise<MigrationResult> {
   // 1. Migrar Clientes
   try {
     const clientsSnap = await getDocs(collection(db, 'clients'));
-    const rows = clientsSnap.docs.map((d) =>
-      clientToSupabaseRow({ ...(d.data() as Client), id: d.id })
-    );
+    const rows = clientsSnap.docs
+      .map((d) => ({ ...(d.data() as Client), id: d.id }))
+      .filter((c) => Boolean(c.businessName || c.slug))
+      .map((c) => clientToSupabaseRow(c));
     if (rows.length > 0) {
       const { error } = await supabase.from('clients').upsert(rows, { onConflict: 'id' });
       if (error) result.errors.push(`Clientes: ${error.message}`);
@@ -216,9 +217,20 @@ export async function migrateFirestoreToSupabase(): Promise<MigrationResult> {
     });
 
     if (quoteRows.length > 0) {
-      const { error } = await supabase.from('quote_requests').insert(quoteRows);
-      if (error) result.errors.push(`Solicitudes: ${error.message}`);
-      else result.quotesMigrated = quoteRows.length;
+      const { data: existingQuotes } = await supabase
+        .from('quote_requests')
+        .select('name, created_at, source');
+      const existingKeys = new Set(
+        (existingQuotes || []).map((eq: any) => `${eq.source}|${eq.name}|${new Date(eq.created_at).toISOString()}`)
+      );
+      const freshQuotes = quoteRows.filter(
+        (q) => !existingKeys.has(`${q.source}|${q.name}|${new Date(q.created_at).toISOString()}`)
+      );
+      if (freshQuotes.length > 0) {
+        const { error } = await supabase.from('quote_requests').insert(freshQuotes);
+        if (error) result.errors.push(`Solicitudes: ${error.message}`);
+        else result.quotesMigrated = freshQuotes.length;
+      }
     }
 
     if (reportRows.length > 0) {

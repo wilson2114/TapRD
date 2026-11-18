@@ -243,21 +243,10 @@ export async function fetchClientAnalytics(
     }
   }
 
-  if (!isFirebaseConfigured || !db) {
-    return summary;
-  }
-
   const safeDays = maxDays === null ? 365 : Math.min(Math.max(1, maxDays), 365);
   const cutoffIso = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
-  const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
-  const q = query(eventsRef, where('createdAt', '>=', cutoffIso), orderBy('createdAt', 'desc'), limit(5000));
-  const snapshot = await getDocs(q);
 
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    const type = data.type as AnalyticsEventType;
-    const device = data.device as AnalyticsDeviceType;
-
+  const applyEvent = (type: AnalyticsEventType, device: AnalyticsDeviceType) => {
     if (includeAdvanced) {
       if (device === 'ios') summary.iosCount++;
       else if (device === 'android') summary.androidCount++;
@@ -298,7 +287,44 @@ export async function fetchClientAnalytics(
         if (includeAdvanced) summary.directionsClicks++;
         break;
     }
-  });
+  };
+
+  let loadedFromFirestore = false;
+  if (isFirebaseConfigured && db) {
+    try {
+      const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
+      const q = query(eventsRef, where('createdAt', '>=', cutoffIso), orderBy('createdAt', 'desc'), limit(5000));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        loadedFromFirestore = true;
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          applyEvent(data.type as AnalyticsEventType, data.device as AnalyticsDeviceType);
+        });
+      }
+    } catch {
+      // Continuar con respaldo de Supabase
+    }
+  }
+
+  if (!loadedFromFirestore && isSupabaseConfigured) {
+    try {
+      const { data: rows, error } = await supabase
+        .from('analytics_events')
+        .select('type, device')
+        .eq('client_id', clientId)
+        .gte('created_at', cutoffIso)
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (!error && Array.isArray(rows)) {
+        rows.forEach((r: any) => {
+          applyEvent(r.type as AnalyticsEventType, r.device as AnalyticsDeviceType);
+        });
+      }
+    } catch {
+      // Ignorar si falla Supabase
+    }
+  }
 
   return summary;
 }

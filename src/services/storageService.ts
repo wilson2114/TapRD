@@ -164,7 +164,21 @@ export async function uploadClientLogo(
  * Elimina el archivo anterior cuando se reemplaza o remueve el logo
  */
 export async function deleteClientLogo(logoUrl: string): Promise<boolean> {
-  if (!logoUrl || !isFirebaseConfigured) return false;
+  if (!logoUrl) return false;
+
+  if (isSupabaseConfigured && logoUrl.includes('/storage/v1/object/public/taprd-media/')) {
+    try {
+      const path = logoUrl.split('/storage/v1/object/public/taprd-media/')[1]?.split('?')[0];
+      if (path) {
+        await supabase.storage.from('taprd-media').remove([decodeURIComponent(path)]);
+        return true;
+      }
+    } catch {
+      // Continuar
+    }
+  }
+
+  if (!isFirebaseConfigured) return false;
 
   // Solo intentar eliminar si es una URL de Firebase Storage
   if (!logoUrl.includes('firebasestorage.googleapis.com')) {
@@ -359,21 +373,32 @@ export async function uploadServiceImage(
  */
 export async function deleteServiceImage(imagePathOrUrl?: string, thumbPathOrUrl?: string): Promise<boolean> {
   if (!imagePathOrUrl && !thumbPathOrUrl) return false;
-  if (!isFirebaseConfigured) return true;
-
-  let success = true;
 
   const pathsToDelete = [imagePathOrUrl, thumbPathOrUrl].filter(Boolean) as string[];
+  let success = true;
 
   for (const item of pathsToDelete) {
-    // Si es DataURL, no hay nada que borrar en Storage
     if (item.startsWith('data:')) continue;
+
+    if (isSupabaseConfigured) {
+      try {
+        const supaPath = item.includes('/storage/v1/object/public/taprd-media/')
+          ? decodeURIComponent(item.split('/storage/v1/object/public/taprd-media/')[1]?.split('?')[0] || '')
+          : item;
+        if (supaPath && !supaPath.startsWith('http')) {
+          await supabase.storage.from('taprd-media').remove([supaPath]);
+        }
+      } catch {
+        // Ignorar si no existe en Supabase
+      }
+    }
+
+    if (!isFirebaseConfigured) continue;
 
     try {
       const storageRef = ref(storage, item);
       await deleteObject(storageRef);
     } catch (err: any) {
-      // Ignorar si el archivo ya no existe
       if (!err.message?.includes('object-not-found')) {
         console.warn('Aviso eliminando imagen de servicio de Storage:', err.message);
         success = false;
