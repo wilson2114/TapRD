@@ -170,7 +170,7 @@ assert(
 );
 
 assert(
-  storageServiceCode.includes('deleteObject(storageRef)'),
+  storageServiceCode.includes('.remove([supaPath])') || storageServiceCode.includes('deleteObject(storageRef)'),
   'Prueba 17: deleteServiceImage elimina los objetos de Storage liberando espacio y evitando archivos huérfanos'
 );
 

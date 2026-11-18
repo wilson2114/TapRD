@@ -1,16 +1,4 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  updateDoc,
-  query,
-  where,
-  limit,
-  onSnapshot
-} from 'firebase/firestore';
-import { db, isFirebaseConfigured, auth } from '../lib/firebase';
+import { isFirebaseConfigured, auth } from '../lib/firebase';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { clientToSupabaseRow } from './supabaseMigrationService';
 import { Client, ClientStatus, ClientService } from '../types/client';
@@ -58,27 +46,24 @@ export async function generateUniqueSlug(
   let candidateSlug = baseSlug;
   let counter = 1;
 
-  // Si Firestore está configurado, verificar existencia
-  if (isFirebaseConfigured) {
+  // Si Supabase está configurado, verificar existencia
+  if (isSupabaseConfigured) {
     try {
       while (true) {
-        const q = query(
-          collection(db, COLLECTION_NAME),
-          where('slug', '==', candidateSlug)
-        );
-        const snapshot = await getDocs(q);
-
-        // Si no hay documentos o el único encontrado es el mismo cliente en edición
-        const isTaken = snapshot.docs.some(d => d.id !== existingClientId);
+        const { data: rows, error } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('slug', candidateSlug);
+        if (error) break;
+        const isTaken = (rows || []).some((r: any) => r.id !== existingClientId);
         if (!isTaken) {
           return candidateSlug;
         }
-
         counter++;
         candidateSlug = `${baseSlug}-${counter}`;
       }
     } catch (err) {
-      console.warn('Aviso comprobando slug en Firestore:', err);
+      console.warn('Aviso comprobando slug en Supabase:', err);
     }
   }
 
@@ -134,76 +119,38 @@ function notifySubscribers(list: Client[]) {
 }
 
 /**
- * Escucha en tiempo real los cambios en la colección 'clients' de Cloud Firestore
+ * Escucha en tiempo real los cambios en la tabla 'clients' de Supabase
  */
 export function initFirestoreRealtimeListener(): () => void {
-  if (!isFirebaseConfigured || typeof window === 'undefined') {
+  if (!isSupabaseConfigured || typeof window === 'undefined') {
     return () => {};
   }
 
+  fetchClients().catch(() => undefined);
+
   try {
-    const clientsCol = collection(db, COLLECTION_NAME);
-    const unsubscribe = onSnapshot(
-      clientsCol,
-      (snapshot) => {
-        if (snapshot.empty && !hasLoadedFromFirestore && !isSeedingInProgress) {
-          seedInitialClientsToFirestore();
-          return;
+    const channel = supabase
+      .channel('taprd-clients-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients' },
+        () => {
+          fetchClients().catch(() => undefined);
         }
+      )
+      .subscribe();
 
-        if (!snapshot.empty) {
-          const list: Client[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as Client;
-            if (!data?.businessName && !data?.slug) return;
-            list.push({ ...data, id: d.id });
-          });
-
-          // Ordenar por fecha de creación descendente
-          list.sort((a, b) => {
-            const timeA = new Date(b.createdAt || 0).getTime();
-            const timeB = new Date(a.createdAt || 0).getTime();
-            return timeA - timeB;
-          });
-
-          hasLoadedFromFirestore = true;
-          saveLocalCache(list);
-        }
-      },
-      (error) => {
-        console.warn('Aviso en onSnapshot de Firestore (utilizando caché local):', error.message);
-      }
-    );
-
-    return unsubscribe;
+    return () => {
+      supabase.removeChannel(channel);
+    };
   } catch (err) {
-    console.warn('No se pudo iniciar listener de Firestore:', err);
+    console.warn('No se pudo iniciar listener de Supabase:', err);
     return () => {};
   }
 }
 
 if (typeof window !== 'undefined') {
   initFirestoreRealtimeListener();
-}
-
-/**
- * Sembrar datos iniciales si Firestore está completamente vacío
- */
-async function seedInitialClientsToFirestore() {
-  if (isSeedingInProgress || !isFirebaseConfigured) return;
-  isSeedingInProgress = true;
-
-  try {
-    for (const client of INITIAL_CLIENTS) {
-      const docRef = doc(db, COLLECTION_NAME, client.id);
-      await setDoc(docRef, client);
-    }
-    hasLoadedFromFirestore = true;
-  } catch (err) {
-    console.warn('Aviso al sembrar clientes en Firestore:', err);
-  } finally {
-    isSeedingInProgress = false;
-  }
 }
 
 /**
@@ -225,52 +172,23 @@ export function getClients(): Client[] {
 }
 
 /**
- * CONSULTAR CLIENTES DESDE FIRESTORE
- * Retorna la lista actualizada de Cloud Firestore
+ * CONSULTAR CLIENTES DESDE SUPABASE
+ * Retorna la lista actualizada de Supabase PostgreSQL
  */
 export async function fetchClients(): Promise<Client[]> {
-  if (!isFirebaseConfigured) {
-    return inMemoryClients;
-  }
-
-  try {
-    const snap = await getDocs(collection(db, COLLECTION_NAME));
-    if (!snap.empty) {
-      const list: Client[] = [];
-      snap.forEach((d) => {
-        const data = d.data() as Client;
-        if (!data?.businessName && !data?.slug) return;
-        list.push({ ...data, id: d.id });
-      });
-
-      list.sort((a, b) => {
-        const timeA = new Date(b.createdAt || 0).getTime();
-        const timeB = new Date(a.createdAt || 0).getTime();
-        return timeA - timeB;
-      });
-
-      hasLoadedFromFirestore = true;
-      saveLocalCache(list);
-      return list;
-    }
-  } catch (err) {
-    console.warn('Error consultando clientes de Firestore:', err);
-  }
-
   if (isSupabaseConfigured) {
     try {
       const { data: rows, error } = await supabase
         .from('clients')
         .select('data')
         .order('created_at', { ascending: false });
-      if (!error && Array.isArray(rows) && rows.length > 0) {
+      if (!error && Array.isArray(rows)) {
         const list = rows
           .map((r: any) => r.data as Client)
           .filter((c) => c && (c.businessName || c.slug));
-        if (list.length > 0) {
-          saveLocalCache(list);
-          return list;
-        }
+        hasLoadedFromFirestore = true;
+        saveLocalCache(list);
+        return list;
       }
     } catch (supaErr) {
       console.warn('Error consultando clientes en Supabase:', supaErr);
@@ -286,19 +204,6 @@ export async function fetchClients(): Promise<Client[]> {
 export async function getClientById(id: string): Promise<Client | null> {
   const local = inMemoryClients.find(c => c.id === id);
   if (local) return local;
-
-  if (isFirebaseConfigured) {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = { ...(snap.data() as Client), id: snap.id };
-        return data;
-      }
-    } catch (err) {
-      console.warn(`Error buscando cliente ${id} en Firestore:`, err);
-    }
-  }
 
   if (isSupabaseConfigured) {
     try {
@@ -368,35 +273,7 @@ export async function getClientBySlug(slug: string): Promise<Client | null> {
   if (existingPromise) return existingPromise;
 
   const task = (async (): Promise<Client | null> => {
-    // 2. Consultar directamente en Firestore primero para reflejar cambios entre dispositivos
-    if (isFirebaseConfigured) {
-      try {
-        const q = query(
-          collection(db, COLLECTION_NAME),
-          where('slug', '==', cleanSlug),
-          limit(1)
-        );
-        const snap = await Promise.race([
-          getDocs(q),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('offline-timeout')), 4500)
-          )
-        ]);
-        if (!snap.empty) {
-          const first = snap.docs[0];
-          const data = { ...(first.data() as Client), id: first.id };
-          const idx = inMemoryClients.findIndex(c => c.id === data.id);
-          if (idx !== -1) inMemoryClients[idx] = data;
-          else inMemoryClients = [data, ...inMemoryClients];
-          savePublicSlugCache(cleanSlug, data);
-          return data;
-        }
-      } catch (err) {
-        console.warn(`Error buscando slug ${cleanSlug} en Firestore (usando respaldo offline si existe):`, err);
-      }
-    }
-
-    // 3. Consultar en Supabase PostgreSQL si Firestore no devolvió resultado
+    // 2. Consultar directamente en Supabase PostgreSQL
     if (isSupabaseConfigured) {
       try {
         const { data: row, error } = await supabase
@@ -453,19 +330,6 @@ export async function incrementClientViews(clientId: string): Promise<void> {
     supabase
       .rpc('increment_client_views', { target_client_id: clientId })
       .then(() => undefined, () => undefined);
-  }
-
-  // En Firestore
-  if (isFirebaseConfigured) {
-    try {
-      const { increment: firestoreIncrement } = await import('firebase/firestore');
-      const docRef = doc(db, COLLECTION_NAME, clientId);
-      await updateDoc(docRef, {
-        viewsCount: firestoreIncrement(1)
-      });
-    } catch {
-      // Ignorar si no tiene permisos de escritura anónima
-    }
   }
 }
 
@@ -545,27 +409,14 @@ export async function createClient(
   const updated = [newClient, ...inMemoryClients.filter(c => c.id !== newId)];
   saveLocalCache(updated);
 
-  // 2. Persistir en Cloud Firestore
-  if (isFirebaseConfigured) {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, newId);
-      const cleanedClient = cleanForFirestore(newClient);
-      await setDoc(docRef, cleanedClient);
-    } catch (err: any) {
-      console.warn('Aviso al persistir cliente en Firestore (datos respaldados en caché local):', err);
-      const isPermError = err?.code === 'permission-denied' || 
-                          (err?.message && err.message.toLowerCase().includes('permission'));
-      if (!isPermError) {
-        throw new Error(err.message || 'No se pudo guardar el cliente en Firestore.');
-      }
-    }
-  }
-
+  // 2. Persistir en Supabase PostgreSQL
   if (isSupabaseConfigured) {
-    supabase
+    const { error } = await supabase
       .from('clients')
-      .upsert(clientToSupabaseRow(newClient), { onConflict: 'id' })
-      .then(() => undefined, () => undefined);
+      .upsert(clientToSupabaseRow(newClient), { onConflict: 'id' });
+    if (error) {
+      throw new Error(error.message || 'No se pudo guardar el cliente en Supabase.');
+    }
   }
 
   return newClient;
@@ -626,30 +477,17 @@ export async function updateClient(
   }
   saveLocalCache([...inMemoryClients]);
 
-  if (isSupabaseConfigured) {
-    supabase
-      .from('clients')
-      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' })
-      .then(() => undefined, () => undefined);
-  }
   if (updatedClient.slug) {
     savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
   }
 
-  // 2. Actualizar en Firestore con merge: true para permitir actualización o creación si no existía
-  if (isFirebaseConfigured) {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      const fullDoc = cleanForFirestore(updatedClient);
-      await setDoc(docRef, fullDoc, { merge: true });
-    } catch (err: any) {
-      console.error(`Error actualizando cliente ${id} en Firestore:`, err);
-      const isPermError = err?.code === 'permission-denied' || 
-                          (err?.message && err.message.toLowerCase().includes('permission'));
-      if (isPermError) {
-        throw new Error('Permiso denegado en Firestore al guardar los cambios. Verifica tu sesión e intenta de nuevo.');
-      }
-      throw new Error(err.message || 'No se pudo actualizar el cliente en Firestore.');
+  // 2. Actualizar en Supabase PostgreSQL
+  if (isSupabaseConfigured) {
+    const { error } = await supabase
+      .from('clients')
+      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' });
+    if (error) {
+      throw new Error(error.message || 'No se pudo actualizar el cliente en Supabase.');
     }
   }
 
@@ -717,17 +555,8 @@ export async function deleteClient(id: string, hardDelete: boolean = false): Pro
   inMemoryClients = inMemoryClients.filter(c => c.id !== id);
   saveLocalCache(inMemoryClients);
 
-  if (isFirebaseConfigured) {
-    try {
-      const { deleteDoc } = await import('firebase/firestore');
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
-    } catch (err) {
-      console.error('Error al eliminar físicamente de Firestore:', err);
-    }
-  }
-
   if (isSupabaseConfigured) {
-    supabase.from('clients').delete().eq('id', id).then(() => undefined, () => undefined);
+    await supabase.from('clients').delete().eq('id', id);
   }
 
   return true;
@@ -743,9 +572,8 @@ export async function getAdminStats(): Promise<{
   pendingCount: number;
   inactiveCount: number;
 }> {
-  // Asegurar carga reciente si es posible
   let list = inMemoryClients;
-  if (!hasLoadedFromFirestore && isFirebaseConfigured) {
+  if (!hasLoadedFromFirestore && isSupabaseConfigured) {
     list = await fetchClients();
   }
 
@@ -885,34 +713,21 @@ export async function updateClientByOwner(
     } catch {}
   }
 
-  // Persistir únicamente los campos permitidos en Firestore para no tocar campos protegidos
-  if (isFirebaseConfigured) {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      const cleanedUpdates = cleanForFirestore(safeUpdates);
-      await Promise.race([
-        updateDoc(docRef, cleanedUpdates as Record<string, any>),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Tiempo de espera agotado al conectar con Firestore. Verifica tu conexión e intenta de nuevo.')), 15000)
-        )
-      ]);
-    } catch (err: any) {
-      console.error(`Error actualizando cliente ${id} (propietario) en Firestore:`, err);
-      const isPermError = err?.code === 'permission-denied' || 
-                          (err?.message && err.message.toLowerCase().includes('permission'));
-      if (isPermError) {
-        throw new Error('Permiso denegado en Firestore al guardar los cambios. Verifica tu sesión e intenta de nuevo.');
-      }
-      throw new Error(err.message || 'No se pudo actualizar el cliente en Firestore.');
-    }
-  }
-
   const updatedClient: Client = {
     ...current,
     ...safeUpdates,
     id: current.id,
     createdAt: current.createdAt
   };
+
+  if (isSupabaseConfigured) {
+    const { error } = await supabase
+      .from('clients')
+      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' });
+    if (error) {
+      throw new Error(error.message || 'No se pudo actualizar el cliente en Supabase.');
+    }
+  }
 
   if (index !== -1) {
     inMemoryClients[index] = updatedClient;
@@ -922,13 +737,6 @@ export async function updateClientByOwner(
   saveLocalCache([...inMemoryClients]);
   if (updatedClient.slug) {
     savePublicSlugCache(updatedClient.slug.toLowerCase(), updatedClient);
-  }
-
-  if (isSupabaseConfigured) {
-    supabase
-      .from('clients')
-      .upsert(clientToSupabaseRow(updatedClient), { onConflict: 'id' })
-      .then(() => undefined, () => undefined);
   }
 
   // Sincronizar con la sesión local del cliente si existe

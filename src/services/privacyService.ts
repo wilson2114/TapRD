@@ -1,15 +1,5 @@
-import { db, auth, isFirebaseConfigured } from '../lib/firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
-  updateDoc 
-} from 'firebase/firestore';
+import { auth } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { PrivacyRequest, PrivacyRequestStatus, PrivacyRequestType } from '../types/legal';
 
 const LOCAL_STORAGE_KEY = 'taprd_privacy_requests';
@@ -54,16 +44,23 @@ export async function createPrivacyRequest(data: {
       updatedAt: now
     };
 
-    // 1. Guardar en Firestore si está disponible
-    if (isFirebaseConfigured && db) {
+    if (isSupabaseConfigured) {
       try {
-        await setDoc(doc(db, 'privacyRequests', id), newRequest);
+        await supabase.from('privacy_requests').upsert({
+          id: newRequest.id,
+          user_id: newRequest.userId,
+          client_id: newRequest.clientId,
+          request_type: newRequest.requestType,
+          details: newRequest.details,
+          status: newRequest.status,
+          created_at: now,
+          updated_at: now
+        }, { onConflict: 'id' });
       } catch (dbErr) {
-        console.warn('[PrivacyService] Aviso guardando en Firestore:', dbErr);
+        console.warn('[PrivacyService] Aviso guardando en Supabase:', dbErr);
       }
     }
 
-    // 2. Guardar en copia local
     const local = getLocalRequests();
     local.unshift(newRequest);
     saveLocalRequests(local);
@@ -74,25 +71,41 @@ export async function createPrivacyRequest(data: {
   }
 }
 
+function mapSupabasePrivacyRow(r: any): PrivacyRequest {
+  return {
+    id: r.id,
+    userId: r.user_id || '',
+    clientId: r.client_id || '',
+    clientBusinessName: '',
+    userEmail: '',
+    requestType: r.request_type || 'access',
+    status: r.status || 'pending',
+    details: r.details || '',
+    notes: r.admin_notes || undefined,
+    createdAt: r.created_at || new Date().toISOString(),
+    updatedAt: r.updated_at || r.created_at || new Date().toISOString()
+  };
+}
+
 export async function getPrivacyRequestsForUser(userId: string): Promise<PrivacyRequest[]> {
   const localList = getLocalRequests().filter(r => r.userId === userId);
 
-  if (isFirebaseConfigured && db) {
+  if (isSupabaseConfigured) {
     try {
-      const q = query(
-        collection(db, 'privacyRequests'),
-        where('userId', '==', userId)
-      );
-      const snap = await getDocs(q);
-      const remoteList = snap.docs.map(d => ({ ...(d.data() as PrivacyRequest), id: d.id }));
-      
-      // Combinar priorizando remoto
-      const map = new Map<string, PrivacyRequest>();
-      localList.forEach(r => map.set(r.id, r));
-      remoteList.forEach(r => map.set(r.id, r));
-      return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const { data: rows, error } = await supabase
+        .from('privacy_requests')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(rows)) {
+        const remoteList = rows.map(mapSupabasePrivacyRow);
+        const map = new Map<string, PrivacyRequest>();
+        localList.forEach(r => map.set(r.id, r));
+        remoteList.forEach(r => map.set(r.id, r));
+        return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
     } catch (err) {
-      console.warn('[PrivacyService] Aviso cargando desde Firestore:', err);
+      console.warn('[PrivacyService] Aviso cargando desde Supabase:', err);
     }
   }
 
@@ -102,15 +115,19 @@ export async function getPrivacyRequestsForUser(userId: string): Promise<Privacy
 export async function getAllPrivacyRequests(): Promise<PrivacyRequest[]> {
   const localList = getLocalRequests();
 
-  if (isFirebaseConfigured && db) {
+  if (isSupabaseConfigured) {
     try {
-      const snap = await getDocs(collection(db, 'privacyRequests'));
-      const remoteList = snap.docs.map(d => ({ ...(d.data() as PrivacyRequest), id: d.id }));
-      
-      const map = new Map<string, PrivacyRequest>();
-      localList.forEach(r => map.set(r.id, r));
-      remoteList.forEach(r => map.set(r.id, r));
-      return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const { data: rows, error } = await supabase
+        .from('privacy_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(rows)) {
+        const remoteList = rows.map(mapSupabasePrivacyRow);
+        const map = new Map<string, PrivacyRequest>();
+        localList.forEach(r => map.set(r.id, r));
+        remoteList.forEach(r => map.set(r.id, r));
+        return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
     } catch (err) {
       console.warn('[PrivacyService] Aviso cargando solicitudes administrativas:', err);
     }
@@ -134,11 +151,18 @@ export async function updatePrivacyRequestStatus(
       ...(status === 'completed' || status === 'rejected' ? { resolvedAt: now, resolvedBy: resolvedBy || auth?.currentUser?.uid } : {})
     };
 
-    if (isFirebaseConfigured && db) {
+    if (isSupabaseConfigured) {
       try {
-        await updateDoc(doc(db, 'privacyRequests', id), updates);
+        await supabase
+          .from('privacy_requests')
+          .update({
+            status,
+            ...(notes !== undefined ? { admin_notes: notes } : {}),
+            updated_at: now
+          })
+          .eq('id', id);
       } catch (err) {
-        console.warn('[PrivacyService] Aviso actualizando solicitud en Firestore:', err);
+        console.warn('[PrivacyService] Aviso actualizando solicitud en Supabase:', err);
       }
     }
 

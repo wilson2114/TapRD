@@ -1,11 +1,5 @@
-import { db, auth, isFirebaseConfigured } from '../lib/firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDocs, 
-  updateDoc 
-} from 'firebase/firestore';
+import { auth } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ContentReport, ReportActionTaken, ReportReason, ReportStatus } from '../types/legal';
 
 const LOCAL_STORAGE_KEY = 'taprd_content_reports';
@@ -50,11 +44,23 @@ export async function createContentReport(data: {
       createdAt: now
     };
 
-    if (isFirebaseConfigured && db) {
+    if (isSupabaseConfigured) {
       try {
-        await setDoc(doc(db, 'reports', id), newReport);
+        await supabase.from('reports').upsert({
+          id: newReport.id,
+          profile_slug: newReport.profileSlug,
+          client_id: newReport.clientId,
+          business_name: newReport.businessName,
+          reason: newReport.reason,
+          details: newReport.details,
+          reporter_email: newReport.reporterEmail || '',
+          status: newReport.status,
+          action_taken: newReport.actionTaken || 'none',
+          created_at: now,
+          updated_at: now
+        }, { onConflict: 'id' });
       } catch (dbErr) {
-        console.warn('[ReportsService] Aviso guardando reporte en Firestore:', dbErr);
+        console.warn('[ReportsService] Aviso guardando reporte en Supabase:', dbErr);
       }
     }
 
@@ -71,19 +77,34 @@ export async function createContentReport(data: {
 export async function getAllReports(): Promise<ContentReport[]> {
   const localList = getLocalReports();
 
-  if (isFirebaseConfigured && db) {
+  if (isSupabaseConfigured) {
     try {
-      const snap = await getDocs(collection(db, 'reports'));
-      const remoteList = snap.docs
-        .filter((d) => d.data()?.type !== 'quote_request')
-        .map((d) => ({ ...(d.data() as ContentReport), id: d.id }));
-      
-      const map = new Map<string, ContentReport>();
-      localList.forEach(r => map.set(r.id, r));
-      remoteList.forEach(r => map.set(r.id, r));
-      return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const { data: rows, error } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(rows)) {
+        const remoteList: ContentReport[] = rows.map((r: any) => ({
+          id: r.id,
+          profileSlug: r.profile_slug || '',
+          clientId: r.client_id || '',
+          businessName: r.business_name || '',
+          reason: r.reason || 'other',
+          details: r.details || '',
+          reporterEmail: r.reporter_email || undefined,
+          status: r.status || 'pending',
+          actionTaken: r.action_taken || 'none',
+          adminNotes: r.admin_notes || undefined,
+          createdAt: r.created_at || new Date().toISOString()
+        }));
+
+        const map = new Map<string, ContentReport>();
+        localList.forEach(r => map.set(r.id, r));
+        remoteList.forEach(r => map.set(r.id, r));
+        return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
     } catch (err) {
-      console.warn('[ReportsService] Aviso cargando reportes de Firestore:', err);
+      console.warn('[ReportsService] Aviso cargando reportes de Supabase:', err);
     }
   }
 
@@ -109,11 +130,19 @@ export async function updateReportStatus(
       } : {})
     };
 
-    if (isFirebaseConfigured && db) {
+    if (isSupabaseConfigured) {
       try {
-        await updateDoc(doc(db, 'reports', id), updates);
+        await supabase
+          .from('reports')
+          .update({
+            status,
+            ...(actionTaken ? { action_taken: actionTaken } : {}),
+            ...(adminNotes !== undefined ? { admin_notes: adminNotes } : {}),
+            updated_at: now
+          })
+          .eq('id', id);
       } catch (err) {
-        console.warn('[ReportsService] Aviso actualizando reporte en Firestore:', err);
+        console.warn('[ReportsService] Aviso actualizando reporte en Supabase:', err);
       }
     }
 

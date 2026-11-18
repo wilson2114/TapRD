@@ -1,18 +1,8 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  updateDoc,
-  query,
-  where
-} from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Plan } from '../types/plan';
 import { DEFAULT_PLANS } from '../config/plans';
 
-const COLLECTION_NAME = 'plans';
+const SUPABASE_TABLE = 'plans';
 const LOCAL_STORAGE_KEY = 'taprd_plans_data_v1';
 
 let inMemoryPlans: Plan[] = [...DEFAULT_PLANS];
@@ -38,9 +28,22 @@ function saveLocalCache(plans: Plan[]): void {
   } catch {}
 }
 
+function planToSupabaseRow(p: Plan) {
+  return {
+    id: p.id,
+    name: p.name,
+    price: Number(p.price) || 0,
+    currency: p.currency || 'DOP',
+    billing_cycle: (p as any).billingCycle || p.interval || 'monthly',
+    active: p.active !== false,
+    data: p,
+    updated_at: p.updatedAt || new Date().toISOString()
+  };
+}
+
 /**
- * Inicializa y sincroniza los planes desde Firestore.
- * Si la colección no contiene planes en Firestore, la inicializa con los planes por defecto.
+ * Inicializa y sincroniza los planes desde Supabase.
+ * Si la tabla no contiene planes en Supabase, la inicializa con los planes por defecto.
  */
 export async function initializePlans(): Promise<Plan[]> {
   if (hasInitialized && inMemoryPlans.length > 0) {
@@ -49,21 +52,17 @@ export async function initializePlans(): Promise<Plan[]> {
 
   inMemoryPlans = loadLocalCache();
 
-  if (isFirebaseConfigured) {
+  if (isSupabaseConfigured) {
     try {
-      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-      if (!snapshot.empty) {
-        const firestorePlans: Plan[] = [];
-        snapshot.forEach((docSnap) => {
-          firestorePlans.push({
-            id: docSnap.id,
-            ...docSnap.data()
-          } as Plan);
-        });
+      const { data: rows, error } = await supabase.from(SUPABASE_TABLE).select('id, data');
+      if (!error && Array.isArray(rows) && rows.length > 0) {
+        const supaPlans: Plan[] = rows.map((r: any) => ({
+          ...(r.data as Plan),
+          id: r.id
+        }));
 
-        // Ordenar con starter, business, pro en primer lugar si aplica
         const order = ['starter', 'business', 'pro'];
-        firestorePlans.sort((a, b) => {
+        supaPlans.sort((a, b) => {
           const idxA = order.indexOf(a.id);
           const idxB = order.indexOf(b.id);
           if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -72,22 +71,15 @@ export async function initializePlans(): Promise<Plan[]> {
           return a.name.localeCompare(b.name);
         });
 
-        inMemoryPlans = firestorePlans;
+        inMemoryPlans = supaPlans;
         saveLocalCache(inMemoryPlans);
         hasInitialized = true;
         return inMemoryPlans;
-      } else {
-        // Sembrar planes predeterminados en Firestore
-        for (const defaultPlan of DEFAULT_PLANS) {
-          try {
-            await setDoc(doc(db, COLLECTION_NAME, defaultPlan.id), defaultPlan);
-          } catch (seedErr) {
-            console.warn(`No se pudo sembrar plan ${defaultPlan.id} en Firestore:`, seedErr);
-          }
-        }
+      } else if (!error) {
+        await supabase.from(SUPABASE_TABLE).upsert(DEFAULT_PLANS.map(planToSupabaseRow), { onConflict: 'id' });
       }
     } catch (err) {
-      console.warn('Aviso cargando planes desde Firestore, usando planes predeterminados:', err);
+      console.warn('Aviso cargando planes desde Supabase, usando planes predeterminados:', err);
     }
   }
 
@@ -119,7 +111,6 @@ export async function getPlanById(id: string): Promise<Plan | null> {
   const found = plans.find(p => p.id === id);
   if (found) return found;
 
-  // Fallback a planes por defecto
   const defaultFound = DEFAULT_PLANS.find(p => p.id === id);
   return defaultFound || null;
 }
@@ -138,17 +129,16 @@ export async function createPlan(data: Omit<Plan, 'createdAt' | 'updatedAt'>): P
     updatedAt: now
   };
 
-  // Guardar en Firestore si está configurado
-  if (isFirebaseConfigured) {
-    try {
-      await setDoc(doc(db, COLLECTION_NAME, planId), newPlan);
-    } catch (err) {
-      console.error('Error creando plan en Firestore:', err);
-      throw err;
+  if (isSupabaseConfigured) {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(planToSupabaseRow(newPlan), { onConflict: 'id' });
+    if (error) {
+      console.error('Error creando plan en Supabase:', error);
+      throw new Error(error.message);
     }
   }
 
-  // Actualizar en memoria y caché local
   inMemoryPlans = inMemoryPlans.filter(p => p.id !== planId);
   inMemoryPlans.push(newPlan);
   saveLocalCache(inMemoryPlans);
@@ -173,15 +163,13 @@ export async function updatePlan(id: string, updates: Partial<Omit<Plan, 'id' | 
     updatedAt: now
   };
 
-  if (isFirebaseConfigured) {
-    try {
-      await updateDoc(doc(db, COLLECTION_NAME, id), {
-        ...updates,
-        updatedAt: now
-      });
-    } catch (err) {
-      console.error(`Error actualizando plan "${id}" en Firestore:`, err);
-      throw err;
+  if (isSupabaseConfigured) {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(planToSupabaseRow(updatedPlan), { onConflict: 'id' });
+    if (error) {
+      console.error(`Error actualizando plan "${id}" en Supabase:`, error);
+      throw new Error(error.message);
     }
   }
 

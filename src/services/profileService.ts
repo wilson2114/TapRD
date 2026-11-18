@@ -1,5 +1,4 @@
-import { collection, addDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getClientBySlug, getPublicClientData } from './clientService';
 import { Client } from '../types/client';
@@ -152,37 +151,6 @@ export function trackAnalyticsEvent(
       })
       .then(() => undefined, () => undefined);
   }
-
-  const writeFirestoreFallback = () => {
-    if (!isFirebaseConfigured || !db) return;
-    addDoc(collection(db, 'clients', validated.data.clientId, 'analytics_events'), {
-      type: validated.data.type,
-      device: validated.data.device,
-      createdAt: new Date().toISOString()
-    }).catch((err) => {
-      console.warn('[Analytics] No se pudo registrar el evento en Firestore:', err?.code || err?.message || err);
-    });
-  };
-
-  if (typeof fetch !== 'undefined') {
-    fetch('/api/public/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(validated.data),
-      keepalive: true
-    })
-      .then((res) => {
-        if (res.status === 404 || res.status === 503) {
-          writeFirestoreFallback();
-        }
-      })
-      .catch(() => {
-        writeFirestoreFallback();
-      });
-    return;
-  }
-
-  writeFirestoreFallback();
 }
 
 /**
@@ -289,25 +257,7 @@ export async function fetchClientAnalytics(
     }
   };
 
-  let loadedFromFirestore = false;
-  if (isFirebaseConfigured && db) {
-    try {
-      const eventsRef = collection(db, 'clients', clientId, 'analytics_events');
-      const q = query(eventsRef, where('createdAt', '>=', cutoffIso), orderBy('createdAt', 'desc'), limit(5000));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        loadedFromFirestore = true;
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          applyEvent(data.type as AnalyticsEventType, data.device as AnalyticsDeviceType);
-        });
-      }
-    } catch {
-      // Continuar con respaldo de Supabase
-    }
-  }
-
-  if (!loadedFromFirestore && isSupabaseConfigured) {
+  if (isSupabaseConfigured) {
     try {
       const { data: rows, error } = await supabase
         .from('analytics_events')

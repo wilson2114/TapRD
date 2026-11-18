@@ -1,5 +1,3 @@
-import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage, isFirebaseConfigured } from '../lib/firebase';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   validateServiceImageFile, 
@@ -100,63 +98,9 @@ export async function uploadClientLogo(
     }
   }
 
-  // 3. Si Firebase no está completamente configurado en el entorno, usar fallback DataURL
-  if (!isFirebaseConfigured) {
-    if (onProgress) onProgress(100);
-    return fileToDataUrl(file);
-  }
-
-  try {
-    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
-    const timestamp = Date.now();
-    const cleanClientId = clientId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const storagePath = `clients/${cleanClientId}/logo_${timestamp}.${fileExtension}`;
-    const storageRef = ref(storage, storagePath);
-
-    const metadata = {
-      contentType: file.type,
-      customMetadata: {
-        clientId: cleanClientId,
-        uploadedAt: new Date().toISOString()
-      }
-    };
-
-    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
-
-    return new Promise((resolve, reject) => {
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          if (snapshot.totalBytes > 0 && onProgress) {
-            const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            onProgress(percent);
-          }
-        },
-        async (error) => {
-          console.warn('Advertencia en Firebase Storage upload (utilizando DataURL de contingencia):', error.message);
-          try {
-            const fallbackUrl = await fileToDataUrl(file);
-            resolve(fallbackUrl);
-          } catch (fbErr) {
-            reject(new Error('No se pudo subir la imagen. Por favor intenta de nuevo.'));
-          }
-        },
-        async () => {
-          try {
-            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-            if (onProgress) onProgress(100);
-            resolve(downloadUrl);
-          } catch (urlErr) {
-            const fallbackUrl = await fileToDataUrl(file);
-            resolve(fallbackUrl);
-          }
-        }
-      );
-    });
-  } catch (err: any) {
-    console.warn('Error inicializando upload de Storage:', err);
-    return fileToDataUrl(file);
-  }
+  // 3. Fallback a DataURL si Supabase no está disponible
+  if (onProgress) onProgress(100);
+  return fileToDataUrl(file);
 }
 
 /**
@@ -174,25 +118,11 @@ export async function deleteClientLogo(logoUrl: string): Promise<boolean> {
         return true;
       }
     } catch {
-      // Continuar
+      return false;
     }
   }
 
-  if (!isFirebaseConfigured) return false;
-
-  // Solo intentar eliminar si es una URL de Firebase Storage
-  if (!logoUrl.includes('firebasestorage.googleapis.com')) {
-    return true;
-  }
-
-  try {
-    const storageRef = ref(storage, logoUrl);
-    await deleteObject(storageRef);
-    return true;
-  } catch (err) {
-    console.warn('Aviso al eliminar logo anterior de Storage (puede ya haber sido removido):', err);
-    return false;
-  }
+  return true;
 }
 
 /**
@@ -258,124 +188,84 @@ export async function uploadServiceImage(
 
   if (onProgress) onProgress(60);
 
-  // 3. Si Firebase Storage no está configurado, usar DataURL sanitizado
-  if (!isFirebaseConfigured) {
-    const [mainDataUrl, thumbDataUrl] = await Promise.all([
-      blobToDataUrl(processed.mainBlob),
-      blobToDataUrl(processed.thumbBlob)
-    ]);
+  // 3. Subir a Supabase Storage (bucket taprd-media)
+  if (isSupabaseConfigured) {
+    try {
+      const [mainRes, thumbRes] = await Promise.all([
+        supabase.storage.from('taprd-media').upload(processed.approvedPath, processed.mainBlob, {
+          contentType: processed.mimeType,
+          upsert: true
+        }),
+        supabase.storage.from('taprd-media').upload(processed.approvedThumbPath, processed.thumbBlob, {
+          contentType: processed.mimeType,
+          upsert: true
+        })
+      ]);
 
-    await logSecurityEvent({
-      clientId,
-      action: 'SERVICE_IMAGE_APPROVED_LOCAL',
-      fileName: file.name,
-      fileSizeBytes: processed.mainBlob.size,
-      detectedFormat: processed.mimeType
-    });
+      if (!mainRes.error && !thumbRes.error) {
+        const { data: mainPub } = supabase.storage.from('taprd-media').getPublicUrl(processed.approvedPath);
+        const { data: thumbPub } = supabase.storage.from('taprd-media').getPublicUrl(processed.approvedThumbPath);
 
-    if (onProgress) onProgress(100);
+        if (mainPub?.publicUrl && thumbPub?.publicUrl) {
+          await logSecurityEvent({
+            clientId,
+            action: 'SERVICE_IMAGE_APPROVED',
+            fileName: file.name,
+            fileSizeBytes: processed.mainBlob.size,
+            detectedFormat: processed.mimeType
+          });
 
-    return {
-      imageUrl: mainDataUrl,
-      thumbnailUrl: thumbDataUrl,
-      imagePath: processed.approvedPath,
-      thumbnailPath: processed.approvedThumbPath,
-      imageStatus: 'approved',
-      dimensions: { width: processed.width, height: processed.height }
-    };
+          if (onProgress) onProgress(100);
+
+          return {
+            imageUrl: mainPub.publicUrl,
+            thumbnailUrl: thumbPub.publicUrl,
+            imagePath: processed.approvedPath,
+            thumbnailPath: processed.approvedThumbPath,
+            imageStatus: 'approved',
+            dimensions: { width: processed.width, height: processed.height }
+          };
+        }
+      }
+    } catch (supaErr) {
+      console.warn('Supabase Storage upload falló para servicio, usando DataURL sanitizado:', supaErr);
+    }
   }
 
-  // 4. Subida a Firebase Storage bajo rutas canónicas seguras
-  try {
-    // Metadata segura
-    const mainMetadata = {
-      contentType: processed.mimeType,
-      customMetadata: {
-        clientId: processed.approvedPath.split('/')[1] || clientId,
-        serviceId: processed.approvedPath.split('/')[2] || serviceId,
-        processedAt: new Date().toISOString(),
-        sanitized: 'true'
-      }
-    };
+  // 4. Fallback a DataURL sanitizado
+  const [mainDataUrl, thumbDataUrl] = await Promise.all([
+    blobToDataUrl(processed.mainBlob),
+    blobToDataUrl(processed.thumbBlob)
+  ]);
 
-    const thumbMetadata = {
-      contentType: processed.mimeType,
-      customMetadata: {
-        clientId: processed.approvedPath.split('/')[1] || clientId,
-        serviceId: processed.approvedPath.split('/')[2] || serviceId,
-        isThumbnail: 'true',
-        sanitized: 'true'
-      }
-    };
+  await logSecurityEvent({
+    clientId,
+    action: 'SERVICE_IMAGE_APPROVED_LOCAL',
+    fileName: file.name,
+    fileSizeBytes: processed.mainBlob.size,
+    detectedFormat: processed.mimeType
+  });
 
-    // Referencias de Storage
-    const mainRef = ref(storage, processed.approvedPath);
-    const thumbRef = ref(storage, processed.approvedThumbPath);
+  if (onProgress) onProgress(100);
 
-    // Subir imagen principal y miniatura
-    const [mainUploadResult, thumbUploadResult] = await Promise.all([
-      uploadBytes(mainRef, processed.mainBlob, mainMetadata),
-      uploadBytes(thumbRef, processed.thumbBlob, thumbMetadata)
-    ]);
-
-    if (onProgress) onProgress(85);
-
-    // Obtener URLs públicas de descarga
-    const [imageUrl, thumbnailUrl] = await Promise.all([
-      getDownloadURL(mainUploadResult.ref),
-      getDownloadURL(thumbUploadResult.ref)
-    ]);
-
-    // Registro de éxito en auditoría
-    await logSecurityEvent({
-      clientId,
-      action: 'SERVICE_IMAGE_APPROVED',
-      fileName: file.name,
-      fileSizeBytes: processed.mainBlob.size,
-      detectedFormat: processed.mimeType
-    });
-
-    if (onProgress) onProgress(100);
-
-    return {
-      imageUrl,
-      thumbnailUrl,
-      imagePath: processed.approvedPath,
-      thumbnailPath: processed.approvedThumbPath,
-      imageStatus: 'approved',
-      dimensions: { width: processed.width, height: processed.height }
-    };
-  } catch (storageErr: any) {
-    console.warn('Error subiendo a Storage (fallback a DataURL sanitizado):', storageErr.message);
-
-    // Fallback a DataURL reprocesado
-    const [mainDataUrl, thumbDataUrl] = await Promise.all([
-      blobToDataUrl(processed.mainBlob),
-      blobToDataUrl(processed.thumbBlob)
-    ]);
-
-    if (onProgress) onProgress(100);
-
-    return {
-      imageUrl: mainDataUrl,
-      thumbnailUrl: thumbDataUrl,
-      imagePath: processed.approvedPath,
-      thumbnailPath: processed.approvedThumbPath,
-      imageStatus: 'approved',
-      dimensions: { width: processed.width, height: processed.height }
-    };
-  }
+  return {
+    imageUrl: mainDataUrl,
+    thumbnailUrl: thumbDataUrl,
+    imagePath: processed.approvedPath,
+    thumbnailPath: processed.approvedThumbPath,
+    imageStatus: 'approved',
+    dimensions: { width: processed.width, height: processed.height }
+  };
 }
 
 /**
- * ELIMINAR FOTOGRAFÍA DE SERVICIO DE FIREBASE STORAGE
+ * ELIMINAR FOTOGRAFÍA DE SERVICIO DE SUPABASE STORAGE
  * Elimina la imagen principal y su miniatura cuando el servicio es eliminado o la foto reemplazada
  */
 export async function deleteServiceImage(imagePathOrUrl?: string, thumbPathOrUrl?: string): Promise<boolean> {
   if (!imagePathOrUrl && !thumbPathOrUrl) return false;
 
   const pathsToDelete = [imagePathOrUrl, thumbPathOrUrl].filter(Boolean) as string[];
-  let success = true;
 
   for (const item of pathsToDelete) {
     if (item.startsWith('data:')) continue;
@@ -392,19 +282,7 @@ export async function deleteServiceImage(imagePathOrUrl?: string, thumbPathOrUrl
         // Ignorar si no existe en Supabase
       }
     }
-
-    if (!isFirebaseConfigured) continue;
-
-    try {
-      const storageRef = ref(storage, item);
-      await deleteObject(storageRef);
-    } catch (err: any) {
-      if (!err.message?.includes('object-not-found')) {
-        console.warn('Aviso eliminando imagen de servicio de Storage:', err.message);
-        success = false;
-      }
-    }
   }
 
-  return success;
+  return true;
 }
